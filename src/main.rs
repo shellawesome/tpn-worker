@@ -366,6 +366,10 @@ async fn main() {
         .route("/api/upgrade", post(api::upgrade::do_upgrade))
         .route("/api/config/update", post(api::admin::update_config))
         .route("/api/logs", get(api::logs::get_logs))
+        .route("/api/process/status", get(api::control::process_status))
+        .route("/api/stop", post(api::control::stop_worker))
+        .route("/api/start", post(api::control::start_worker))
+        .route("/api/restart", post(api::control::restart_worker))
         .route("/api/password", post(api::auth::update_password))
         .route_layer(middleware::from_fn_with_state(state.clone(), api::auth::auth_middleware));
 

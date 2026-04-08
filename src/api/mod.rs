@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod auth;
+pub mod control;
 pub mod health;
 pub mod lease;
 pub mod status;

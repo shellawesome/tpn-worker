@@ -44,6 +44,7 @@ pub async fn dashboard_data(State(state): State<AppState>) -> Json<Value> {
         "worker": {
             "version": state.version,
             "mode": config.run_mode.to_string(),
+            "pid": std::process::id(),
             "uptime_seconds": uptime_secs,
             "start_time": state.start_time.to_rfc3339(),
             "git_branch": state.git_branch,

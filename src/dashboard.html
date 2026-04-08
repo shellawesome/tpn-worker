@@ -259,9 +259,14 @@ td.err { color: var(--red); }
     <h2>Worker</h2>
     <div class="row"><span class="label">version</span><span class="value" id="w-version">-</span></div>
     <div class="row"><span class="label">mode</span><span class="value" id="w-mode">-</span></div>
+    <div class="row"><span class="label">PID</span><span class="value" id="w-pid">-</span></div>
     <div class="row"><span class="label">uptime</span><span class="value" id="w-uptime">-</span></div>
     <div class="row"><span class="label">start time</span><span class="value" id="w-start">-</span></div>
     <div class="row"><span class="label">git</span><span class="value" id="w-git">-</span></div>
+    <div style="display:flex;gap:6px;margin-top:10px;">
+      <button class="btn btn-green" onclick="doRestart()">重启</button>
+      <button class="btn btn-red" onclick="doStop()">停止</button>
+    </div>
   </div>
 
   <!-- Mining Pool -->
@@ -482,6 +487,7 @@ function update(data) {
   var w = data.worker;
   text('w-version', 'v' + w.version);
   text('w-mode', w.mode);
+  text('w-pid', w.pid);
   text('w-uptime', fmtUptime(w.uptime_seconds));
   text('w-start', fmtTime(w.start_time));
   text('w-git', w.git_branch + ' @ ' + (w.git_hash || '').substring(0,7));
@@ -717,6 +723,43 @@ function startLogPoll() {
   fetchLogs();
   if (logPollInterval) clearInterval(logPollInterval);
   logPollInterval = setInterval(fetchLogs, 5000);
+}
+
+// ── Process control ──
+function doStop() {
+  if (!confirm('确定要停止服务吗？停止后需要手动启动。')) return;
+  authFetch('/api/stop', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      showToast(d.message, d.success ? 'success' : 'error');
+      if (d.success) {
+        setTimeout(function() {
+          $('statusDot').style.background = 'var(--red)';
+          $('statusText').textContent = 'stopped';
+        }, 1000);
+      }
+    })
+    .catch(function() { showToast('服务已停止', 'success'); });
+}
+
+function doRestart() {
+  if (!confirm('确定要重启服务吗？')) return;
+  authFetch('/api/restart', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      showToast(d.message, d.success ? 'success' : 'error');
+      if (d.success) {
+        $('statusDot').style.background = 'var(--yellow)';
+        $('statusText').textContent = 'restarting...';
+        setTimeout(function() { location.reload(); }, 8000);
+      }
+    })
+    .catch(function() {
+      showToast('正在重启，页面将自动刷新...', 'success');
+      $('statusDot').style.background = 'var(--yellow)';
+      $('statusText').textContent = 'restarting...';
+      setTimeout(function() { location.reload(); }, 8000);
+    });
 }
 
 // ── Init ──
