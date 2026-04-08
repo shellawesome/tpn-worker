@@ -17,15 +17,9 @@ jobs:
           - arch: amd64
             rust_target: x86_64-unknown-linux-gnu
             suffix: ubuntu22-amd64
-          # - arch: arm64
-          #   rust_target: aarch64-unknown-linux-gnu
-          #   suffix: ubuntu22-arm64
-          # - arch: amd64
-          #   rust_target: x86_64-unknown-linux-musl
-          #   suffix: alpine-amd64
-          # - arch: arm64
-          #   rust_target: aarch64-unknown-linux-musl
-          #   suffix: alpine-arm64
+          - arch: amd64
+            rust_target: x86_64-unknown-linux-musl
+            suffix: alpine-amd64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -76,9 +70,7 @@ jobs:
         run: |
           mkdir -p release-files
           cp artifacts/tpn-worker-ubuntu22-amd64/tpn-worker-linux-ubuntu22-amd64 release-files/
-          # cp artifacts/tpn-worker-ubuntu22-arm64/tpn-worker-linux-ubuntu22-arm64 release-files/
-          # cp artifacts/tpn-worker-alpine-amd64/tpn-worker-linux-alpine-amd64 release-files/
-          # cp artifacts/tpn-worker-alpine-arm64/tpn-worker-linux-alpine-arm64 release-files/
+          cp artifacts/tpn-worker-alpine-amd64/tpn-worker-linux-alpine-amd64 release-files/
           ls -lh release-files/
 
       - name: Get version from Cargo.toml
@@ -126,12 +118,16 @@ jobs:
             | File | OS | Arch |
             |------|----|------|
             | `tpn-worker-linux-ubuntu22-amd64` | Ubuntu 22.04 (glibc) | AMD64 |
+            | `tpn-worker-linux-alpine-amd64` | Alpine Linux (musl) | AMD64 |
 
             ### Quick Install
 
             ```bash
             # Ubuntu 22.04 - AMD64
             wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-ubuntu22-amd64 -O /usr/local/bin/tpn-worker && chmod +x /usr/local/bin/tpn-worker
+
+            # Alpine Linux - AMD64
+            wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-alpine-amd64 -O /usr/local/bin/tpn-worker && chmod +x /usr/local/bin/tpn-worker
             ```
           files: release-files/*
           prerelease: false
