@@ -110,12 +110,26 @@ pub async fn update_password(
     }
 }
 
+/// GET /api/auth/check — Public endpoint to check if auth is required
+pub async fn auth_check(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let required = !state.config.login_password.is_empty();
+    Json(serde_json::json!({ "auth_required": required }))
+}
+
 /// Auth middleware — checks Authorization: Bearer <token> header
+/// If no password is configured, all requests are allowed without auth.
 pub async fn auth_middleware(
     State(state): State<AppState>,
     req: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // No password set — skip auth entirely
+    if state.config.login_password.is_empty() {
+        return Ok(next.run(req).await);
+    }
+
     let secret = &state.config.jwt_secret;
 
     // Check Authorization header

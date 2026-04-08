@@ -333,6 +333,26 @@ td.err { color: var(--red); }
   </div>
 </div>
 
+<!-- Logs -->
+<div class="card" style="margin-bottom:24px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <h2 style="margin-bottom:0;">Logs</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="logLines" class="edit-input" style="width:auto;margin:0;padding:3px 8px;">
+        <option value="50">50 lines</option>
+        <option value="100" selected>100 lines</option>
+        <option value="200">200 lines</option>
+        <option value="500">500 lines</option>
+      </select>
+      <label style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;gap:4px;">
+        <input type="checkbox" id="logAutoScroll" checked> auto-scroll
+      </label>
+      <button class="btn" onclick="fetchLogs()">刷新</button>
+    </div>
+  </div>
+  <div id="logContainer" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;height:400px;overflow-y:auto;font-family:monospace;font-size:0.78rem;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:var(--muted);">loading logs...</div>
+</div>
+
 <!-- Registration History -->
 <div class="table-wrap">
   <h2>Registration History</h2>
@@ -381,12 +401,24 @@ function showToast(msg, type) {
   setTimeout(function() { t.style.display = 'none'; }, 3000);
 }
 
+// ── Auth check ──
+var authRequired = true;
+function checkAuth() {
+  fetch('/api/auth/check')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      authRequired = !!d.auth_required;
+      showPage();
+    })
+    .catch(function() { showPage(); });
+}
+
 // ── Page switching ──
 function showPage() {
-  var hasToken = !!getToken();
-  document.getElementById('loginPage').style.display = hasToken ? 'none' : 'block';
-  document.getElementById('dashboardPage').style.display = hasToken ? 'block' : 'none';
-  if (hasToken) poll();
+  var needLogin = authRequired && !getToken();
+  document.getElementById('loginPage').style.display = needLogin ? 'block' : 'none';
+  document.getElementById('dashboardPage').style.display = needLogin ? 'none' : 'block';
+  if (!needLogin) { poll(); startLogPoll(); }
 }
 
 // ── Login ──
@@ -422,7 +454,7 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ── Logout ──
-function doLogout() { clearToken(); showPage(); }
+function doLogout() { clearToken(); checkAuth(); }
 
 // ── Helpers ──
 function $(id) { return document.getElementById(id); }
@@ -529,8 +561,11 @@ function poll() {
 var pollInterval;
 function startPoll() {
   poll();
+  fetchLogs();
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(poll, 5000);
+  if (logPollInterval) clearInterval(logPollInterval);
+  logPollInterval = setInterval(fetchLogs, 5000);
 }
 
 // ── Edit config field ──
@@ -654,9 +689,38 @@ function closeModal() {
   $('upgradeModal').classList.remove('show');
 }
 
+// ── Logs ──
+function fetchLogs() {
+  var n = document.getElementById('logLines').value;
+  authFetch('/api/logs?lines=' + n)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var container = document.getElementById('logContainer');
+      if (d.success && d.lines && d.lines.length > 0) {
+        container.textContent = d.lines.join('\n');
+      } else if (d.error) {
+        container.textContent = 'Error: ' + d.error;
+      } else {
+        container.textContent = 'No logs yet.';
+      }
+      if (document.getElementById('logAutoScroll').checked) {
+        container.scrollTop = container.scrollHeight;
+      }
+    })
+    .catch(function() {
+      document.getElementById('logContainer').textContent = 'Failed to fetch logs.';
+    });
+}
+
+var logPollInterval;
+function startLogPoll() {
+  fetchLogs();
+  if (logPollInterval) clearInterval(logPollInterval);
+  logPollInterval = setInterval(fetchLogs, 5000);
+}
+
 // ── Init ──
-showPage();
-if (getToken()) startPoll();
+checkAuth();
 </script>
 </body>
 </html>

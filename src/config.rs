@@ -119,7 +119,7 @@ pub struct AppConfig {
     pub validator_lease_api_keys: String,
 
     // Login / JWT
-    #[clap(env = "LOGIN_PASSWORD", default_value = "admin123")]
+    #[clap(env = "LOGIN_PASSWORD", default_value = "")]
     pub login_password: String,
     #[clap(env = "JWT_SECRET", default_value = "")]
     pub jwt_secret: String,

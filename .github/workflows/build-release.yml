@@ -131,7 +131,7 @@ jobs:
 
             ```bash
             # Ubuntu 22.04 - AMD64
-            wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-ubuntu22-amd64 -O tpn-worker && chmod +x tpn-worker
+            wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-ubuntu22-amd64 -O /usr/local/bin/tpn-worker && chmod +x /usr/local/bin/tpn-worker
             ```
           files: release-files/*
           prerelease: false

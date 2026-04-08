@@ -45,40 +45,6 @@ TPN (TAO Private Network) Worker 是 Bittensor Subnet 65 的工作节点，为�
 
 ---
 
-## 构建
-
-### 前置条件
-
-- Rust toolchain >= 1.86（通过 [rustup](https://rustup.rs/) 安装）
-- 系统依赖：`pkg-config`、`libssl-dev`（OpenSSL 开发库）
-
-```bash
-# Debian / Ubuntu
-apt-get install -y pkg-config libssl-dev
-
-# RHEL / CentOS
-yum install -y pkgconfig openssl-devel
-```
-
-### 编译
-
-```bash
-cd tpn-worker
-./build.sh
-```
-
-构建产物：当前目录下的 `tpn-worker` 二进制，静态链接 SQLite（`libsqlite3-sys`），无需单独安装数据库。
-
-### 交叉编译（可选）
-
-```bash
-# 在 macOS/其他平台交叉编译 Linux 二进制
-rustup target add x86_64-unknown-linux-gnu
-cargo build --release --target x86_64-unknown-linux-gnu
-```
-
----
-
 ## 部署
 
 ### 1. 准备运行环境
@@ -97,7 +63,7 @@ apt-get install -y wireguard-tools iproute2 curl
 ### 2. 安装二进制
 
 ```bash
-sudo cp tpn-worker /usr/local/bin/
+wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-ubuntu22-amd64 -O /usr/local/bin/tpn-worker && chmod +x /usr/local/bin/tpn-worker
 ```
 
 ### 3. 初始化配置
@@ -135,7 +101,7 @@ vim ~/.config/tpn-worker/.env
 至少填写以下必填项：
 
 ```bash
-SERVER_PUBLIC_HOST=203.0.113.1
+SERVER_PUBLIC_HOST=
 MINING_POOL_URL=http://pool.example.com:3000
 PAYMENT_ADDRESS_EVM=0xYourEvmAddress
 PAYMENT_ADDRESS_BITTENSOR=5YourBittensorAddress

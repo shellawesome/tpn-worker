@@ -95,8 +95,8 @@ MINING_POOL_URL=
 PAYMENT_ADDRESS_EVM=
 PAYMENT_ADDRESS_BITTENSOR=
 
-# ===== 登录密码 =====
-# LOGIN_PASSWORD=admin123
+# ===== 登录密码（为空则不需要认证）=====
+# LOGIN_PASSWORD=
 
 # ===== 服务器 =====
 # RUN_MODE=worker
@@ -204,13 +204,33 @@ async fn main() {
         }
     }
 
-    // 2. Initialize tracing
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .with_target(false)
-        .init();
+    // 2. Initialize tracing (stdout + file)
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+
+        let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
+
+        let stdout_layer = tracing_subscriber::fmt::layer()
+            .with_target(false);
+
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/tpn-worker.log")
+            .expect("Failed to open /tmp/tpn-worker.log");
+        let file_layer = tracing_subscriber::fmt::layer()
+            .with_target(false)
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(log_file));
+
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(stdout_layer)
+            .with(file_layer)
+            .init();
+    }
 
     info!("Starting TPN Worker (mode: {})", config.run_mode);
     info!("Config directory: {}", dir.display());
@@ -345,6 +365,7 @@ async fn main() {
         .route("/api/version", get(api::upgrade::get_version))
         .route("/api/upgrade", post(api::upgrade::do_upgrade))
         .route("/api/config/update", post(api::admin::update_config))
+        .route("/api/logs", get(api::logs::get_logs))
         .route("/api/password", post(api::auth::update_password))
         .route_layer(middleware::from_fn_with_state(state.clone(), api::auth::auth_middleware));
 
@@ -353,6 +374,7 @@ async fn main() {
         .route("/", get(api::health::health))
         .route("/ping", get(api::health::ping))
         .route("/api/login", post(api::auth::login))
+        .route("/api/auth/check", get(api::auth::auth_check))
         .merge(protected_routes)
         .with_state(state.clone());
 
