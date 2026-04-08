@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::AppState;
 
@@ -222,24 +222,19 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
 
     info!("Upgrade successful! Scheduling restart...");
 
-    // 9. Restart via systemd or exec
+    // 9. Restart via nohup
     tokio::spawn(async {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        // Try systemd restart first
-        let systemd_result = tokio::process::Command::new("systemctl")
-            .args(["restart", "tpn-worker"])
-            .output()
-            .await;
+        info!("Restarting tpn-worker via nohup...");
+        let _ = tokio::process::Command::new("nohup")
+            .args(["/usr/local/bin/tpn-worker"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
 
-        if let Ok(output) = systemd_result {
-            if output.status.success() {
-                return;
-            }
-        }
-
-        // Fallback: exit and let process manager restart
-        error!("Systemd restart failed, exiting for process manager to restart");
+        // Exit current process so the new one takes over
         std::process::exit(0);
     });
 
