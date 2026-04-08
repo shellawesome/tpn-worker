@@ -1,0 +1,138 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            rust_target: x86_64-unknown-linux-gnu
+            suffix: ubuntu22-amd64
+          # - arch: arm64
+          #   rust_target: aarch64-unknown-linux-gnu
+          #   suffix: ubuntu22-arm64
+          # - arch: amd64
+          #   rust_target: x86_64-unknown-linux-musl
+          #   suffix: alpine-amd64
+          # - arch: arm64
+          #   rust_target: aarch64-unknown-linux-musl
+          #   suffix: alpine-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Install Zig for cross-compilation
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: Build for ${{ matrix.suffix }}
+        run: cargo zigbuild --release --target ${{ matrix.rust_target }}
+
+      - name: Prepare release asset
+        run: |
+          mv target/${{ matrix.rust_target }}/release/tpn-worker tpn-worker-linux-${{ matrix.suffix }}
+          echo "RELEASE_ASSET=tpn-worker-linux-${{ matrix.suffix }}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tpn-worker-${{ matrix.suffix }}
+          path: ${{ env.RELEASE_ASSET }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          cp artifacts/tpn-worker-ubuntu22-amd64/tpn-worker-linux-ubuntu22-amd64 release-files/
+          # cp artifacts/tpn-worker-ubuntu22-arm64/tpn-worker-linux-ubuntu22-arm64 release-files/
+          # cp artifacts/tpn-worker-alpine-amd64/tpn-worker-linux-alpine-amd64 release-files/
+          # cp artifacts/tpn-worker-alpine-arm64/tpn-worker-linux-alpine-arm64 release-files/
+          ls -lh release-files/
+
+      - name: Get version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Current version: v${VERSION}"
+
+      - name: Delete existing latest release and tag
+        run: |
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create latest tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Create or Update Latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Build (${{ steps.version.outputs.version }})"
+          body: |
+            ## Latest Auto Build
+
+            **Version**: ${{ steps.version.outputs.version }}
+            **Commit**: ${{ github.sha }}
+            **Branch**: ${{ github.ref_name }}
+            **Build Time**: ${{ github.event.head_commit.timestamp }}
+
+            ### Changes
+
+            ${{ github.event.head_commit.message }}
+
+            ---
+
+            ### Downloads
+
+            | File | OS | Arch |
+            |------|----|------|
+            | `tpn-worker-linux-ubuntu22-amd64` | Ubuntu 22.04 (glibc) | AMD64 |
+
+            ### Quick Install
+
+            ```bash
+            # Ubuntu 22.04 - AMD64
+            wget https://github.com/${{ github.repository }}/releases/download/latest/tpn-worker-linux-ubuntu22-amd64 -O tpn-worker && chmod +x tpn-worker
+            ```
+          files: release-files/*
+          prerelease: false
+          draft: false

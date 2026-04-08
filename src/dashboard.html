@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TPN Worker Dashboard</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e4e6eb;
+  --muted: #8b8d97;
+  --accent: #4f8ff7;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #eab308;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  background: var(--bg);
+  color: var(--text);
+  padding: 20px;
+  min-height: 100vh;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.header h1 { font-size: 1.4rem; font-weight: 600; }
+.header .status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.header .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.btn-green { border-color: var(--green); color: var(--green); }
+.btn.btn-green:hover { background: var(--green); color: #000; }
+.btn.btn-red { border-color: var(--red); color: var(--red); }
+.btn.btn-red:hover { background: var(--red); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.card h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.card .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+.card .row .label { color: var(--muted); }
+.card .row .value { font-weight: 500; word-break: break-all; }
+.card .row .value.ok { color: var(--green); }
+.card .row .value.err { color: var(--red); }
+.card .row .value.warn { color: var(--yellow); }
+.card .row .value a { color: var(--accent); text-decoration: none; }
+.card .row .value a:hover { text-decoration: underline; }
+.edit-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  margin-left: 6px;
+  border-radius: 3px;
+}
+.edit-btn:hover { background: rgba(79,143,247,0.15); }
+.edit-input {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  width: 100%;
+  margin-top: 4px;
+}
+.edit-actions { display: flex; gap: 4px; margin-top: 4px; }
+.edit-actions .btn { padding: 3px 10px; font-size: 0.75rem; }
+
+/* Login page */
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+.login-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+  width: 360px;
+  text-align: center;
+}
+.login-box h1 { font-size: 1.4rem; margin-bottom: 8px; }
+.login-box p { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
+.login-box input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+}
+.login-box input:focus { outline: none; border-color: var(--accent); }
+.login-box .btn { width: 100%; padding: 10px; font-size: 0.95rem; }
+.login-error { color: var(--red); font-size: 0.85rem; margin-bottom: 12px; display: none; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  z-index: 9999;
+  animation: fadeIn 0.3s;
+  display: none;
+}
+.toast.success { background: var(--green); color: #000; }
+.toast.error { background: var(--red); color: #fff; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Table */
+.table-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.table-wrap h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 16px 16px 12px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.ok { color: var(--green); }
+td.err { color: var(--red); }
+.empty { padding: 24px; text-align: center; color: var(--muted); }
+
+/* Update modal */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: none; align-items: center; justify-content: center;
+  z-index: 9998;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 420px;
+  max-width: 90vw;
+}
+.modal h3 { margin-bottom: 16px; font-size: 1.1rem; }
+.modal .modal-body { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; line-height: 1.6; }
+.modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<!-- Update modal -->
+<div class="modal-overlay" id="upgradeModal">
+  <div class="modal">
+    <h3 id="upgradeTitle">检查更新</h3>
+    <div class="modal-body" id="upgradeBody">正在检查...</div>
+    <div class="modal-actions" id="upgradeActions"></div>
+  </div>
+</div>
+
+<!-- Login Page -->
+<div id="loginPage" style="display:none;">
+  <div class="login-wrap">
+    <div class="login-box">
+      <h1>TPN Worker</h1>
+      <p>请输入管理密码</p>
+      <div class="login-error" id="loginError"></div>
+      <input type="password" id="loginPassword" placeholder="密码" autofocus>
+      <button class="btn btn-green" id="loginBtn" onclick="doLogin()">登录</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard Page -->
+<div id="dashboardPage" style="display:none;">
+
+<div class="header">
+  <h1>TPN Worker Dashboard</h1>
+  <div class="header-actions">
+    <div class="status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">connecting...</span>
+    </div>
+    <button class="btn btn-green" onclick="checkUpdate()">更新</button>
+    <button class="btn btn-red" onclick="doLogout()">登出</button>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- Worker Info -->
+  <div class="card">
+    <h2>Worker</h2>
+    <div class="row"><span class="label">version</span><span class="value" id="w-version">-</span></div>
+    <div class="row"><span class="label">mode</span><span class="value" id="w-mode">-</span></div>
+    <div class="row"><span class="label">uptime</span><span class="value" id="w-uptime">-</span></div>
+    <div class="row"><span class="label">start time</span><span class="value" id="w-start">-</span></div>
+    <div class="row"><span class="label">git</span><span class="value" id="w-git">-</span></div>
+  </div>
+
+  <!-- Mining Pool -->
+  <div class="card">
+    <h2>Mining Pool</h2>
+    <div class="row">
+      <span class="label">URL</span>
+      <span class="value" id="mp-url">-</span>
+      <button class="edit-btn" onclick="editField('mining_pool_url', 'mp-url')">编辑</button>
+    </div>
+    <div class="row"><span class="label">name</span><span class="value" id="mp-name">-</span></div>
+    <div class="row"><span class="label">registration</span><span class="value" id="mp-reg">-</span></div>
+    <div class="row"><span class="label">last register</span><span class="value" id="mp-time">-</span></div>
+    <div class="row"><span class="label">website</span><span class="value" id="mp-website">-</span></div>
+  </div>
+
+  <!-- WireGuard -->
+  <div class="card">
+    <h2>WireGuard</h2>
+    <div class="row"><span class="label">status</span><span class="value" id="wg-status">-</span></div>
+    <div class="row"><span class="label">interface</span><span class="value" id="wg-iface">-</span></div>
+    <div class="row"><span class="label">active peers</span><span class="value" id="wg-peers">-</span></div>
+    <div class="row"><span class="label">active leases</span><span class="value" id="wg-leases">-</span></div>
+    <div class="row"><span class="label">max peers</span><span class="value" id="wg-max">-</span></div>
+    <div class="row"><span class="label">listen port</span><span class="value" id="wg-port">-</span></div>
+    <div class="row"><span class="label">subnet</span><span class="value" id="wg-subnet">-</span></div>
+    <div class="row"><span class="label">server pubkey</span><span class="value" id="wg-pubkey">-</span></div>
+  </div>
+
+  <!-- Proxy -->
+  <div class="card">
+    <h2>Proxy</h2>
+    <div class="row"><span class="label">SOCKS5 port</span><span class="value" id="px-s5port">-</span></div>
+    <div class="row"><span class="label">HTTP port</span><span class="value" id="px-httpport">-</span></div>
+    <div class="row"><span class="label">credentials total</span><span class="value" id="px-total">-</span></div>
+    <div class="row"><span class="label">credentials active</span><span class="value" id="px-active">-</span></div>
+    <div class="row"><span class="label">available (non-priority)</span><span class="value" id="px-avail">-</span></div>
+    <div class="row"><span class="label">priority slots</span><span class="value" id="px-priority">-</span></div>
+  </div>
+
+  <!-- Network -->
+  <div class="card">
+    <h2>Network</h2>
+    <div class="row"><span class="label">public host</span><span class="value" id="net-host">-</span></div>
+    <div class="row"><span class="label">public port</span><span class="value" id="net-port">-</span></div>
+    <div class="row"><span class="label">protocol</span><span class="value" id="net-proto">-</span></div>
+    <div class="row"><span class="label">base URL</span><span class="value" id="net-url">-</span></div>
+  </div>
+
+  <!-- Payment -->
+  <div class="card">
+    <h2>Payment</h2>
+    <div class="row">
+      <span class="label">EVM</span>
+      <span class="value" id="pay-evm">-</span>
+      <button class="edit-btn" onclick="editField('payment_address_evm', 'pay-evm')">编辑</button>
+    </div>
+    <div class="row">
+      <span class="label">Bittensor</span>
+      <span class="value" id="pay-bt">-</span>
+      <button class="edit-btn" onclick="editField('payment_address_bittensor', 'pay-bt')">编辑</button>
+    </div>
+  </div>
+
+  <!-- Database -->
+  <div class="card">
+    <h2>Database</h2>
+    <div class="row"><span class="label">path</span><span class="value" id="db-path">-</span></div>
+  </div>
+</div>
+
+<!-- Registration History -->
+<div class="table-wrap">
+  <h2>Registration History</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Status</th>
+        <th>HTTP</th>
+        <th>Mining Pool</th>
+        <th>Response</th>
+      </tr>
+    </thead>
+    <tbody id="reg-body">
+      <tr><td colspan="5" class="empty">loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- end dashboardPage -->
+
+<script>
+// ── Token management ──
+function getToken() { return localStorage.getItem('tpn_token'); }
+function setToken(t) { localStorage.setItem('tpn_token', t); }
+function clearToken() { localStorage.removeItem('tpn_token'); }
+
+// ── Auth-aware fetch ──
+function authFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  var token = getToken();
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  return fetch(url, opts).then(function(r) {
+    if (r.status === 401) { clearToken(); showPage(); }
+    return r;
+  });
+}
+
+// ── Toast ──
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type || 'success');
+  t.style.display = 'block';
+  setTimeout(function() { t.style.display = 'none'; }, 3000);
+}
+
+// ── Page switching ──
+function showPage() {
+  var hasToken = !!getToken();
+  document.getElementById('loginPage').style.display = hasToken ? 'none' : 'block';
+  document.getElementById('dashboardPage').style.display = hasToken ? 'block' : 'none';
+  if (hasToken) poll();
+}
+
+// ── Login ──
+function doLogin() {
+  var pw = document.getElementById('loginPassword').value;
+  if (!pw) return;
+  document.getElementById('loginBtn').disabled = true;
+  fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    document.getElementById('loginBtn').disabled = false;
+    if (d.success && d.data && d.data.token) {
+      setToken(d.data.token);
+      document.getElementById('loginError').style.display = 'none';
+      showPage();
+    } else {
+      document.getElementById('loginError').textContent = d.message || '登录失败';
+      document.getElementById('loginError').style.display = 'block';
+    }
+  })
+  .catch(function() {
+    document.getElementById('loginBtn').disabled = false;
+    document.getElementById('loginError').textContent = '网络错误';
+    document.getElementById('loginError').style.display = 'block';
+  });
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.getElementById('loginPage').style.display !== 'none') doLogin();
+});
+
+// ── Logout ──
+function doLogout() { clearToken(); showPage(); }
+
+// ── Helpers ──
+function $(id) { return document.getElementById(id); }
+function text(id, v) { $(id).textContent = v || '-'; }
+function cls(id, v, c) { $(id).textContent = v || '-'; $(id).className = 'value ' + (c || ''); }
+
+function fmtUptime(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  if (s < 86400) return h + 'h ' + m + 'm';
+  var d = Math.floor(s/86400); h = Math.floor((s%86400)/3600);
+  return d + 'd ' + h + 'h';
+}
+
+function fmtTime(t) {
+  if (!t || t === '-') return '-';
+  try { return new Date(t).toLocaleString('zh-CN', {hour12: false}); } catch(e) { return t; }
+}
+
+function truncate(s, n) { return !s ? '-' : (s.length > n ? s.substring(0, n) + '...' : s); }
+
+// ── Dashboard update ──
+function update(data) {
+  var w = data.worker;
+  text('w-version', 'v' + w.version);
+  text('w-mode', w.mode);
+  text('w-uptime', fmtUptime(w.uptime_seconds));
+  text('w-start', fmtTime(w.start_time));
+  text('w-git', w.git_branch + ' @ ' + (w.git_hash || '').substring(0,7));
+
+  var mp = data.mining_pool;
+  $('mp-url').innerHTML = mp.url ? '<a href="'+mp.url+'" target="_blank">'+mp.url+'</a>' : '-';
+  text('mp-name', mp.name || '-');
+  cls('mp-reg', mp.last_registration_success ? 'registered' : 'not registered',
+      mp.last_registration_success ? 'ok' : 'err');
+  text('mp-time', fmtTime(mp.last_registration_time));
+  $('mp-website').innerHTML = mp.website_url ? '<a href="'+mp.website_url+'" target="_blank">'+mp.website_url+'</a>' : '-';
+
+  var wg = data.wireguard;
+  cls('wg-status', wg.enabled ? 'running' : 'disabled', wg.enabled ? 'ok' : 'warn');
+  text('wg-iface', wg.interface);
+  text('wg-peers', wg.active_peers + ' / ' + wg.max_peers);
+  text('wg-leases', wg.active_leases);
+  text('wg-max', wg.max_peers);
+  text('wg-port', wg.listen_port);
+  text('wg-subnet', wg.subnet);
+  text('wg-pubkey', wg.server_public_key ? wg.server_public_key.substring(0,20) + '...' : '-');
+
+  var px = data.proxy;
+  text('px-s5port', px.socks5_port);
+  text('px-httpport', px.http_proxy_port);
+  text('px-total', px.credential_count);
+  text('px-active', px.active_credentials);
+  text('px-avail', px.available_non_priority);
+  text('px-priority', px.priority_slots);
+
+  var net = data.network;
+  text('net-host', net.public_host);
+  text('net-port', net.public_port);
+  text('net-proto', net.protocol);
+  $('net-url').innerHTML = net.base_url ? '<a href="'+net.base_url+'" target="_blank">'+net.base_url+'</a>' : '-';
+
+  text('pay-evm', data.payment.evm_address || 'not set');
+  text('pay-bt', data.payment.bittensor_address || 'not set');
+  text('db-path', data.database.path);
+
+  // Registration history
+  var tbody = $('reg-body');
+  var rows = data.registration_history || [];
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">no registration records yet</td></tr>';
+  } else {
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var sc = r.success ? 'ok' : 'err';
+      html += '<tr>';
+      html += '<td>' + fmtTime(r.created_at) + '</td>';
+      html += '<td class="' + sc + '">' + (r.success ? 'OK' : 'FAIL') + '</td>';
+      html += '<td>' + r.status_code + '</td>';
+      html += '<td>' + truncate(r.mining_pool_url, 40) + '</td>';
+      html += '<td>' + truncate(r.error_message || r.response_body, 60) + '</td>';
+      html += '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  $('statusDot').style.background = mp.last_registration_success ? 'var(--green)' : 'var(--red)';
+  $('statusText').textContent = 'v' + w.version + ' | up ' + fmtUptime(w.uptime_seconds);
+}
+
+function poll() {
+  if (!getToken()) return;
+  authFetch('/api/dashboard')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { update(d); })
+    .catch(function() {
+      $('statusDot').style.background = 'var(--red)';
+      $('statusText').textContent = 'connection error';
+    });
+}
+
+var pollInterval;
+function startPoll() {
+  poll();
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(poll, 5000);
+}
+
+// ── Edit config field ──
+var editingField = null;
+function editField(apiKey, displayId) {
+  if (editingField) return;
+  editingField = apiKey;
+  var el = $(displayId);
+  var currentVal = el.textContent;
+  if (currentVal === '-' || currentVal === 'not set') currentVal = '';
+
+  var row = el.closest('.row');
+  var origHTML = row.innerHTML;
+
+  var inputId = 'edit-input-' + apiKey;
+  row.innerHTML =
+    '<span class="label">' + row.querySelector('.label').textContent + '</span>' +
+    '<div style="flex:1;margin-left:12px;">' +
+      '<input class="edit-input" id="' + inputId + '" value="' + currentVal + '">' +
+      '<div class="edit-actions">' +
+        '<button class="btn btn-green" id="edit-save">保存</button>' +
+        '<button class="btn" id="edit-cancel">取消</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('edit-cancel').onclick = function() {
+    row.innerHTML = origHTML;
+    editingField = null;
+  };
+  document.getElementById('edit-save').onclick = function() {
+    var val = document.getElementById(inputId).value;
+    var body = {};
+    body[apiKey] = val;
+    authFetch('/api/config/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        showToast(d.message, 'success');
+      } else {
+        showToast(d.message || '更新失败', 'error');
+      }
+      row.innerHTML = origHTML;
+      editingField = null;
+      poll();
+    })
+    .catch(function() {
+      showToast('网络错误', 'error');
+      row.innerHTML = origHTML;
+      editingField = null;
+    });
+  };
+  document.getElementById(inputId).focus();
+}
+
+// ── Update check ──
+function checkUpdate() {
+  var modal = $('upgradeModal');
+  var title = $('upgradeTitle');
+  var body = $('upgradeBody');
+  var actions = $('upgradeActions');
+  modal.classList.add('show');
+  title.textContent = '检查更新';
+  body.textContent = '正在检查最新版本...';
+  actions.innerHTML = '<button class="btn" onclick="closeModal()">关闭</button>';
+
+  authFetch('/api/version')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var info = d.data;
+      if (!info) {
+        body.textContent = '获取版本信息失败';
+        return;
+      }
+      if (info.has_update) {
+        title.textContent = '发现新版本';
+        body.innerHTML = '当前版本: <strong>' + info.current + '</strong><br>' +
+                         '最新版本: <strong>' + info.latest + '</strong><br><br>' +
+                         '是否立即更新？更新后服务将自动重启。';
+        actions.innerHTML =
+          '<button class="btn btn-green" id="doUpgradeBtn" onclick="doUpgrade()">立即更新</button>' +
+          '<button class="btn" onclick="closeModal()">取消</button>';
+      } else {
+        body.innerHTML = '当前版本: <strong>' + info.current + '</strong><br>' +
+                         (info.latest ? '最新版本: <strong>' + info.latest + '</strong><br>' : '') +
+                         '<br>已是最新版本。';
+      }
+    })
+    .catch(function() {
+      body.textContent = '检查更新失败，网络错误';
+    });
+}
+
+function doUpgrade() {
+  var body = $('upgradeBody');
+  var actions = $('upgradeActions');
+  body.textContent = '正在下载并安装更新，请勿关闭页面...';
+  actions.innerHTML = '';
+
+  authFetch('/api/upgrade', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        body.textContent = '更新成功！服务正在重启，页面将在 10 秒后自动刷新...';
+        setTimeout(function() { location.reload(); }, 10000);
+      } else {
+        body.textContent = '更新失败: ' + (d.message || '未知错误');
+        actions.innerHTML = '<button class="btn" onclick="closeModal()">关闭</button>';
+      }
+    })
+    .catch(function() {
+      body.textContent = '更新请求失败，可能服务正在重启...';
+      setTimeout(function() { location.reload(); }, 10000);
+    });
+}
+
+function closeModal() {
+  $('upgradeModal').classList.remove('show');
+}
+
+// ── Init ──
+showPage();
+if (getToken()) startPoll();
+</script>
+</body>
+</html>
