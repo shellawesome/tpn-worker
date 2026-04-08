@@ -141,8 +141,9 @@ fn ensure_env_file(dir: &PathBuf) -> PathBuf {
 /// Load the .env file into process environment, then set SQLITE_PATH default.
 fn load_env(dir: &PathBuf) {
     let env_path = dir.join(".env");
-    // dotenvy does NOT override existing env vars
-    let _ = dotenvy::from_path(&env_path);
+    // Override existing env vars so .env changes take effect after restart
+    // (nohup restart inherits the old process's env vars)
+    let _ = dotenvy::from_path_override(&env_path);
 
     // Set SQLITE_PATH default to config dir if not already set
     if std::env::var("SQLITE_PATH").is_err() {
