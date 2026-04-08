@@ -68,15 +68,27 @@ fn detect_public_ip() -> String {
         .output()
     {
         Ok(output) if output.status.success() => {
-            let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !ip.is_empty() {
-                eprintln!("Detected public IP: {}", ip);
-                return ip;
+            let body = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !body.is_empty() {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
+                    if let Some(ip) = value.get("ip").and_then(|v| v.as_str()) {
+                        let ip = ip.trim();
+                        if ip.parse::<std::net::IpAddr>().is_ok() {
+                            eprintln!("Detected public IP: {}", ip);
+                            return ip.to_string();
+                        }
+                    }
+                }
+
+                if body.parse::<std::net::IpAddr>().is_ok() {
+                    eprintln!("Detected public IP: {}", body);
+                    return body;
+                }
             }
         }
         _ => {}
     }
-    eprintln!("Warning: could not detect public IP via curl 3.0.3.0");
+    eprintln!("Warning: could not detect public IP via curl 3.0.3.0 (json.ip/plain text)");
     String::new()
 }
 
