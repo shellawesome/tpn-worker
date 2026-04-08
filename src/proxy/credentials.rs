@@ -89,6 +89,9 @@ impl CredentialManager {
             }
         }
 
+        // Sync host/port in DB to match current config (covers port changes via .env)
+        self.sync_host_port().await?;
+
         Ok(())
     }
 
@@ -255,6 +258,27 @@ impl CredentialManager {
         }
 
         info!("Migrated {} credentials from password files", socks.len());
+        Ok(())
+    }
+
+    /// Update ip_address and port for all credentials in DB to match current config.
+    async fn sync_host_port(&self) -> Result<(), AppError> {
+        let result = sqlx::query(
+            "UPDATE worker_socks5_configs SET ip_address = $1, port = $2
+             WHERE ip_address != $1 OR port != $2",
+        )
+        .bind(&self.host)
+        .bind(self.port as i32)
+        .execute(&self.pool)
+        .await?;
+
+        let updated = result.rows_affected();
+        if updated > 0 {
+            info!(
+                "Synced {} credentials to current host/port ({}:{})",
+                updated, self.host, self.port
+            );
+        }
         Ok(())
     }
 
