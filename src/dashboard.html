@@ -291,7 +291,11 @@ td.err { color: var(--red); }
     <div class="row"><span class="label">active peers</span><span class="value" id="wg-peers">-</span></div>
     <div class="row"><span class="label">active leases</span><span class="value" id="wg-leases">-</span></div>
     <div class="row"><span class="label">max peers</span><span class="value" id="wg-max">-</span></div>
-    <div class="row"><span class="label">listen port</span><span class="value" id="wg-port">-</span></div>
+    <div class="row">
+      <span class="label">listen port</span>
+      <span class="value" id="wg-port">-</span>
+      <button class="edit-btn" onclick="editPortField('wireguard_server_port', 'wg-port')">编辑</button>
+    </div>
     <div class="row"><span class="label">subnet</span><span class="value" id="wg-subnet">-</span></div>
     <div class="row"><span class="label">server pubkey</span><span class="value" id="wg-pubkey">-</span></div>
   </div>
@@ -299,8 +303,16 @@ td.err { color: var(--red); }
   <!-- Proxy -->
   <div class="card">
     <h2>Proxy</h2>
-    <div class="row"><span class="label">SOCKS5 port</span><span class="value" id="px-s5port">-</span></div>
-    <div class="row"><span class="label">HTTP port</span><span class="value" id="px-httpport">-</span></div>
+    <div class="row">
+      <span class="label">SOCKS5 port</span>
+      <span class="value" id="px-s5port">-</span>
+      <button class="edit-btn" onclick="editPortField('socks5_port', 'px-s5port')">编辑</button>
+    </div>
+    <div class="row">
+      <span class="label">HTTP port</span>
+      <span class="value" id="px-httpport">-</span>
+      <button class="edit-btn" onclick="editPortField('http_proxy_port', 'px-httpport')">编辑</button>
+    </div>
     <div class="row"><span class="label">credentials total</span><span class="value" id="px-total">-</span></div>
     <div class="row"><span class="label">credentials active</span><span class="value" id="px-active">-</span></div>
     <div class="row"><span class="label">available (non-priority)</span><span class="value" id="px-avail">-</span></div>
@@ -311,7 +323,11 @@ td.err { color: var(--red); }
   <div class="card">
     <h2>Network</h2>
     <div class="row"><span class="label">public host</span><span class="value" id="net-host">-</span></div>
-    <div class="row"><span class="label">public port</span><span class="value" id="net-port">-</span></div>
+    <div class="row">
+      <span class="label">public port</span>
+      <span class="value" id="net-port">-</span>
+      <button class="edit-btn" onclick="editPortField('server_public_port', 'net-port')">编辑</button>
+    </div>
     <div class="row"><span class="label">protocol</span><span class="value" id="net-proto">-</span></div>
     <div class="row"><span class="label">base URL</span><span class="value" id="net-url">-</span></div>
   </div>
@@ -620,6 +636,71 @@ function editField(apiKey, displayId) {
       row.innerHTML = origHTML;
       editingField = null;
       poll();
+    })
+    .catch(function() {
+      showToast('网络错误', 'error');
+      row.innerHTML = origHTML;
+      editingField = null;
+    });
+  };
+  document.getElementById(inputId).focus();
+}
+
+// ── Edit port field (save + auto restart) ──
+function editPortField(apiKey, displayId) {
+  if (editingField) return;
+  editingField = apiKey;
+  var el = $(displayId);
+  var currentVal = el.textContent;
+  if (currentVal === '-') currentVal = '';
+
+  var row = el.closest('.row');
+  var origHTML = row.innerHTML;
+
+  var inputId = 'edit-input-' + apiKey;
+  row.innerHTML =
+    '<span class="label">' + row.querySelector('.label').textContent + '</span>' +
+    '<div style="flex:1;margin-left:12px;">' +
+      '<input class="edit-input" id="' + inputId + '" type="number" min="1" max="65535" value="' + currentVal + '" placeholder="1-65535">' +
+      '<div class="edit-actions">' +
+        '<button class="btn btn-green" id="edit-save">保存并重启</button>' +
+        '<button class="btn" id="edit-cancel">取消</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('edit-cancel').onclick = function() {
+    row.innerHTML = origHTML;
+    editingField = null;
+  };
+  document.getElementById('edit-save').onclick = function() {
+    var val = parseInt(document.getElementById(inputId).value, 10);
+    if (isNaN(val) || val < 1 || val > 65535) {
+      showToast('端口范围 1-65535', 'error');
+      return;
+    }
+    var body = {};
+    body[apiKey] = val;
+    authFetch('/api/config/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        showToast(d.message + '，正在重启...', 'success');
+        row.innerHTML = origHTML;
+        editingField = null;
+        // Trigger restart
+        authFetch('/api/restart', { method: 'POST' }).catch(function() {});
+        $('statusDot').style.background = 'var(--yellow)';
+        $('statusText').textContent = 'restarting...';
+        setTimeout(function() { location.reload(); }, 8000);
+      } else {
+        showToast(d.message || '更新失败', 'error');
+        row.innerHTML = origHTML;
+        editingField = null;
+      }
     })
     .catch(function() {
       showToast('网络错误', 'error');
