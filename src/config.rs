@@ -47,7 +47,7 @@ pub struct AppConfig {
     pub server_public_url: String,
 
     // Mining pool
-    #[clap(env = "MINING_POOL_URL", default_value = "")]
+    #[clap(env = "MINING_POOL_URL", default_value = "http://157.90.237.67:3000")]
     pub mining_pool_url: String,
     #[clap(env = "MINING_POOL_NAME", default_value = "")]
     pub mining_pool_name: String,
@@ -86,9 +86,9 @@ pub struct AppConfig {
     pub priority_slots: i64,
 
     // Payment
-    #[clap(env = "PAYMENT_ADDRESS_EVM", default_value = "")]
+    #[clap(env = "PAYMENT_ADDRESS_EVM", default_value = "0x1c89cb81123903Af1ecbbf3Edd688EfEDE119e12")]
     pub payment_address_evm: String,
-    #[clap(env = "PAYMENT_ADDRESS_BITTENSOR", default_value = "")]
+    #[clap(env = "PAYMENT_ADDRESS_BITTENSOR", default_value = "5EtYnZcY1UFbkwCp3HL5W3bxZCJshKtYVcTsWtB9QUtPTXxA")]
     pub payment_address_bittensor: String,
 
     // Database (SQLite)

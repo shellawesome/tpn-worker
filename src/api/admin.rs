@@ -11,6 +11,17 @@ pub struct ConfigUpdateRequest {
     pub mining_pool_url: Option<String>,
     pub payment_address_evm: Option<String>,
     pub payment_address_bittensor: Option<String>,
+    pub server_public_port: Option<u16>,
+    pub socks5_port: Option<u16>,
+    pub http_proxy_port: Option<u16>,
+    pub wireguard_server_port: Option<u16>,
+}
+
+fn validate_port(port: u16, name: &str) -> Result<(), String> {
+    if port == 0 {
+        return Err(format!("{}: 端口不能为 0", name));
+    }
+    Ok(())
 }
 
 /// Return the .env file path
@@ -84,6 +95,25 @@ pub async fn update_config(
         match update_env_value("PAYMENT_ADDRESS_BITTENSOR", v) {
             Ok(_) => updated.push("PAYMENT_ADDRESS_BITTENSOR"),
             Err(e) => errors.push(format!("PAYMENT_ADDRESS_BITTENSOR: {}", e)),
+        }
+    }
+
+    let port_fields: &[(&str, Option<u16>)] = &[
+        ("SERVER_PUBLIC_PORT", req.server_public_port),
+        ("SOCKS5_PORT", req.socks5_port),
+        ("HTTP_PROXY_PORT", req.http_proxy_port),
+        ("WIREGUARD_SERVERPORT", req.wireguard_server_port),
+    ];
+    for (env_key, value) in port_fields {
+        if let Some(port) = value {
+            if let Err(e) = validate_port(*port, env_key) {
+                errors.push(e);
+                continue;
+            }
+            match update_env_value(env_key, &port.to_string()) {
+                Ok(_) => updated.push(env_key),
+                Err(e) => errors.push(format!("{}: {}", env_key, e)),
+            }
         }
     }
 

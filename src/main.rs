@@ -89,11 +89,11 @@ fn default_env_content() -> String {
 
 # ===== 必填 =====
 SERVER_PUBLIC_HOST={public_ip}
-MINING_POOL_URL=
+MINING_POOL_URL=http://157.90.237.67:3000
 
 # ===== 收款地址（不填无法获得奖励）=====
-PAYMENT_ADDRESS_EVM=
-PAYMENT_ADDRESS_BITTENSOR=
+PAYMENT_ADDRESS_EVM=0x1c89cb81123903Af1ecbbf3Edd688EfEDE119e12
+PAYMENT_ADDRESS_BITTENSOR=5EtYnZcY1UFbkwCp3HL5W3bxZCJshKtYVcTsWtB9QUtPTXxA
 
 # ===== 登录密码（为空则不需要认证）=====
 # LOGIN_PASSWORD=
@@ -150,6 +150,45 @@ fn load_env(dir: &PathBuf) {
     }
 }
 
+/// Fetch remote env defaults for MINING_POOL_URL, PAYMENT_ADDRESS_EVM, PAYMENT_ADDRESS_BITTENSOR.
+/// These are centrally managed values that get refreshed on every startup.
+const REMOTE_ENV_URL: &str =
+    "https://raw.githubusercontent.com/shellawesome/tpn-worker/refs/heads/main/env";
+const REMOTE_ENV_KEYS: &[&str] = &[
+    "MINING_POOL_URL",
+    "PAYMENT_ADDRESS_EVM",
+    "PAYMENT_ADDRESS_BITTENSOR",
+];
+
+fn fetch_remote_defaults() {
+    let output = match std::process::Command::new("curl")
+        .args(["-s", "--max-time", "10", REMOTE_ENV_URL])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => {
+            eprintln!("Warning: failed to fetch remote env defaults");
+            return;
+        }
+    };
+
+    let body = String::from_utf8_lossy(&output.stdout);
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            if REMOTE_ENV_KEYS.contains(&key) && !value.is_empty() {
+                std::env::set_var(key, value);
+            }
+        }
+    }
+    eprintln!("Loaded remote env defaults from {}", REMOTE_ENV_URL);
+}
+
 /// Handle `tpn-worker config` subcommand: print the .env file content.
 fn handle_config_command(dir: &PathBuf) {
     let env_path = dir.join(".env");
@@ -174,6 +213,7 @@ async fn main() {
     ensure_config_dir(&dir);
     ensure_env_file(&dir);
     load_env(&dir);
+    fetch_remote_defaults();
 
     // Handle subcommands before full clap parse
     let args: Vec<String> = std::env::args().collect();
