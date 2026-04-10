@@ -34,28 +34,38 @@ pub async fn register_with_mining_pool(
 
     // Try to attach a WireGuard config (120s lease for registration probe)
     // Mining pool expects wireguard_config as text (INI format), not JSON
-    match lease_manager::get_worker_config(
-        pool,
-        locks,
-        cache,
-        config,
-        wg_server,
-        "wireguard",
-        120,
-        false,
-        "text",
-        None,
-        None,
-    )
-    .await
-    {
-        Ok(lease) => {
-            if let Some(text_config) = lease.config_text {
-                worker["wireguard_config"] = serde_json::Value::String(text_config);
+    let wg_public_ready = wg_server
+        .as_ref()
+        .map(|server| server.public_udp_reachable())
+        .unwrap_or(false);
+    if wg_server.is_some() && !wg_public_ready {
+        warn!(
+            "WireGuard public UDP endpoint is not reachable yet; skipping wireguard_config in registration payload"
+        );
+    } else {
+        match lease_manager::get_worker_config(
+            pool,
+            locks,
+            cache,
+            config,
+            wg_server,
+            "wireguard",
+            120,
+            false,
+            "text",
+            None,
+            None,
+        )
+        .await
+        {
+            Ok(lease) => {
+                if let Some(text_config) = lease.config_text {
+                    worker["wireguard_config"] = serde_json::Value::String(text_config);
+                }
             }
-        }
-        Err(e) => {
-            warn!("Could not obtain WireGuard config for registration: {}", e);
+            Err(e) => {
+                warn!("Could not obtain WireGuard config for registration: {}", e);
+            }
         }
     }
 

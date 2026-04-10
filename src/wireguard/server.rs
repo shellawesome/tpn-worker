@@ -420,6 +420,11 @@ impl WireGuardServer {
         false
     }
 
+    /// Single-shot public UDP reachability probe for the configured WireGuard port.
+    pub fn public_udp_reachable(&self) -> bool {
+        self.check_public_udp_reachability()
+    }
+
     fn check_public_udp_reachability(&self) -> bool {
         if self.endpoint_host.trim().is_empty() {
             warn!("Skipping WireGuard reachability check: SERVER_PUBLIC_HOST is empty");
