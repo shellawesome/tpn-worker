@@ -107,7 +107,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "success": false, "message": format!("创建下载客户端失败: {}", e) })),
+                Json(
+                    serde_json::json!({ "success": false, "message": format!("创建下载客户端失败: {}", e) }),
+                ),
             );
         }
     };
@@ -122,7 +124,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
             if !r.status().is_success() {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({ "success": false, "message": format!("下载失败, HTTP {}", r.status()) })),
+                    Json(
+                        serde_json::json!({ "success": false, "message": format!("下载失败, HTTP {}", r.status()) }),
+                    ),
                 );
             }
             match r.bytes().await {
@@ -130,7 +134,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
                 Err(e) => {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({ "success": false, "message": format!("读取下载数据失败: {}", e) })),
+                        Json(
+                            serde_json::json!({ "success": false, "message": format!("读取下载数据失败: {}", e) }),
+                        ),
                     );
                 }
             }
@@ -138,7 +144,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "success": false, "message": format!("下载失败: {}", e) })),
+                Json(
+                    serde_json::json!({ "success": false, "message": format!("下载失败: {}", e) }),
+                ),
             );
         }
     };
@@ -149,7 +157,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
     if let Err(e) = std::fs::write(temp_path, &binary_data) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "success": false, "message": format!("写入临时文件失败: {}", e) })),
+            Json(
+                serde_json::json!({ "success": false, "message": format!("写入临时文件失败: {}", e) }),
+            ),
         );
     }
 
@@ -158,7 +168,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
     if let Err(e) = std::fs::set_permissions(temp_path, std::fs::Permissions::from_mode(0o755)) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "success": false, "message": format!("设置权限失败: {}", e) })),
+            Json(
+                serde_json::json!({ "success": false, "message": format!("设置权限失败: {}", e) }),
+            ),
         );
     }
 
@@ -181,7 +193,9 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "success": false, "message": format!("获取当前二进制路径失败: {}", e) })),
+                Json(
+                    serde_json::json!({ "success": false, "message": format!("获取当前二进制路径失败: {}", e) }),
+                ),
             );
         }
     };
@@ -199,23 +213,28 @@ pub async fn do_upgrade(State(state): State<AppState>) -> impl IntoResponse {
     if let Err(e) = std::fs::remove_file(&current_exe) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "success": false, "message": format!("删除旧二进制失败: {}", e) })),
+            Json(
+                serde_json::json!({ "success": false, "message": format!("删除旧二进制失败: {}", e) }),
+            ),
         );
     }
     if let Err(e) = std::fs::copy(temp_path, &current_exe) {
         let _ = std::fs::copy(&backup_path, &current_exe);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "success": false, "message": format!("替换二进制失败: {}", e) })),
+            Json(
+                serde_json::json!({ "success": false, "message": format!("替换二进制失败: {}", e) }),
+            ),
         );
     }
-    if let Err(e) = std::fs::set_permissions(&current_exe, std::fs::Permissions::from_mode(0o755))
-    {
+    if let Err(e) = std::fs::set_permissions(&current_exe, std::fs::Permissions::from_mode(0o755)) {
         let _ = std::fs::remove_file(&current_exe);
         let _ = std::fs::copy(&backup_path, &current_exe);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "success": false, "message": format!("设置新二进制权限失败: {}", e) })),
+            Json(
+                serde_json::json!({ "success": false, "message": format!("设置新二进制权限失败: {}", e) }),
+            ),
         );
     }
     let _ = std::fs::remove_file(temp_path);

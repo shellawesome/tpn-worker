@@ -43,10 +43,8 @@ impl TtlCache {
     /// Set a value with optional TTL.
     pub fn set(&self, key: &str, value: serde_json::Value, ttl: Option<Duration>) {
         let expires_at = ttl.map(|d| Instant::now() + d);
-        self.entries.insert(
-            key.to_string(),
-            CacheEntry { value, expires_at },
-        );
+        self.entries
+            .insert(key.to_string(), CacheEntry { value, expires_at });
     }
 
     /// Set a string value with optional TTL.
@@ -67,9 +65,8 @@ impl TtlCache {
     /// Evict all expired entries (optional background cleanup).
     pub fn evict_expired(&self) {
         let now = Instant::now();
-        self.entries.retain(|_, entry| {
-            entry.expires_at.map_or(true, |exp| now <= exp)
-        });
+        self.entries
+            .retain(|_, entry| entry.expires_at.map_or(true, |exp| now <= exp));
     }
 }
 

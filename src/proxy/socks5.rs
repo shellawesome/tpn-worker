@@ -88,7 +88,9 @@ async fn handle_connection(
         stream.read_exact(&mut methods).await?;
 
         if !methods.contains(&AUTH_USERNAME_PASSWORD) {
-            stream.write_all(&[SOCKS5_VERSION, AUTH_NO_ACCEPTABLE]).await?;
+            stream
+                .write_all(&[SOCKS5_VERSION, AUTH_NO_ACCEPTABLE])
+                .await?;
             anyhow::bail!("Client does not support username/password auth");
         }
 
@@ -114,7 +116,9 @@ async fn handle_connection(
         let password = String::from_utf8_lossy(&password).to_string();
 
         if !credentials.authenticate(&username, &password) {
-            stream.write_all(&[AUTH_SUBNEG_VERSION, AUTH_FAILURE]).await?;
+            stream
+                .write_all(&[AUTH_SUBNEG_VERSION, AUTH_FAILURE])
+                .await?;
             anyhow::bail!("Authentication failed for user: {}", username);
         }
 
@@ -219,8 +223,12 @@ async fn send_reply(stream: &mut TcpStream, reply: u8) -> std::io::Result<()> {
         reply,
         0x00, // RSV
         ATYP_IPV4,
-        0, 0, 0, 0, // BND.ADDR
-        0, 0, // BND.PORT
+        0,
+        0,
+        0,
+        0, // BND.ADDR
+        0,
+        0, // BND.PORT
     ];
     stream.write_all(&response).await
 }

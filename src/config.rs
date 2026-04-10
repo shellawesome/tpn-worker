@@ -25,7 +25,10 @@ impl std::str::FromStr for RunMode {
             "validator" => Ok(RunMode::Validator),
             "miner" => Ok(RunMode::Miner),
             "worker" => Ok(RunMode::Worker),
-            _ => Err(format!("Invalid RUN_MODE: '{}'. Must be one of: validator, miner, worker", s)),
+            _ => Err(format!(
+                "Invalid RUN_MODE: '{}'. Must be one of: validator, miner, worker",
+                s
+            )),
         }
     }
 }
@@ -80,20 +83,32 @@ pub struct AppConfig {
     pub dante_port: u16,
     #[clap(env = "PASSWORD_DIR", default_value = "/passwords")]
     pub password_dir: String,
-    #[clap(env = "DANTE_REGEN_REQUEST_DIR", default_value = "/dante_regen_requests")]
+    #[clap(
+        env = "DANTE_REGEN_REQUEST_DIR",
+        default_value = "/dante_regen_requests"
+    )]
     pub dante_regen_dir: String,
     #[clap(env = "PRIORITY_SLOTS", default_value = "5")]
     pub priority_slots: i64,
 
     // Payment
-    #[clap(env = "PAYMENT_ADDRESS_EVM", default_value = "0x1c89cb81123903Af1ecbbf3Edd688EfEDE119e12")]
+    #[clap(
+        env = "PAYMENT_ADDRESS_EVM",
+        default_value = "0x1c89cb81123903Af1ecbbf3Edd688EfEDE119e12"
+    )]
     pub payment_address_evm: String,
-    #[clap(env = "PAYMENT_ADDRESS_BITTENSOR", default_value = "5EtYnZcY1UFbkwCp3HL5W3bxZCJshKtYVcTsWtB9QUtPTXxA")]
+    #[clap(
+        env = "PAYMENT_ADDRESS_BITTENSOR",
+        default_value = "5EtYnZcY1UFbkwCp3HL5W3bxZCJshKtYVcTsWtB9QUtPTXxA"
+    )]
     pub payment_address_bittensor: String,
 
     // Database (SQLite)
     // Runtime default is $HOME/.config/tpn-worker/tpn-worker.db (set in main.rs before parse)
-    #[clap(env = "SQLITE_PATH", default_value = "~/.config/tpn-worker/tpn-worker.db")]
+    #[clap(
+        env = "SQLITE_PATH",
+        default_value = "~/.config/tpn-worker/tpn-worker.db"
+    )]
     pub sqlite_path: String,
 
     // Feature flags

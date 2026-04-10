@@ -1,6 +1,6 @@
+use crate::AppState;
 use axum::extract::State;
 use axum::response::Json;
-use crate::AppState;
 use serde_json::{json, Value};
 
 /// GET / — Health check endpoint.
@@ -24,18 +24,36 @@ pub async fn health(State(state): State<AppState>) -> Json<Value> {
         obj.insert("MINING_POOL_NAME".into(), json!(config.mining_pool_name));
     }
     if !config.mining_pool_url.is_empty() {
-        obj.insert("MINING_POOL_URL".into(), json!(config.effective_mining_pool_url()));
+        obj.insert(
+            "MINING_POOL_URL".into(),
+            json!(config.effective_mining_pool_url()),
+        );
     }
     if !config.server_public_host.is_empty() {
-        obj.insert("SERVER_PUBLIC_HOST".into(), json!(config.server_public_host));
+        obj.insert(
+            "SERVER_PUBLIC_HOST".into(),
+            json!(config.server_public_host),
+        );
     }
-    obj.insert("SERVER_PUBLIC_PORT".into(), json!(config.server_port.to_string()));
-    obj.insert("SERVER_PUBLIC_PROTOCOL".into(), json!(config.server_public_protocol));
+    obj.insert(
+        "SERVER_PUBLIC_PORT".into(),
+        json!(config.server_port.to_string()),
+    );
+    obj.insert(
+        "SERVER_PUBLIC_PROTOCOL".into(),
+        json!(config.server_public_protocol),
+    );
     if !config.mining_pool_rewards.is_empty() {
-        obj.insert("MINING_POOL_REWARDS".into(), json!(config.mining_pool_rewards));
+        obj.insert(
+            "MINING_POOL_REWARDS".into(),
+            json!(config.mining_pool_rewards),
+        );
     }
     if !config.mining_pool_website_url.is_empty() {
-        obj.insert("MINING_POOL_WEBSITE_URL".into(), json!(config.mining_pool_website_url));
+        obj.insert(
+            "MINING_POOL_WEBSITE_URL".into(),
+            json!(config.mining_pool_website_url),
+        );
     }
     if !config.broadcast_message.is_empty() {
         obj.insert("BROADCAST_MESSAGE".into(), json!(config.broadcast_message));

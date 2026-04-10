@@ -4,7 +4,7 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::json;
 use std::net::SocketAddr;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::crypto::lease_token;
 use crate::error::AppError;
@@ -44,14 +44,21 @@ pub async fn lease_new(
         info!("Checking if caller is mining pool: {}", mining_pool_url);
 
         let caller_ip = sanitize_ipv4(&addr.ip().to_string());
-        let pool_ip = resolve_domain_to_ip(&mining_pool_url, &state.cache).await
+        let pool_ip = resolve_domain_to_ip(&mining_pool_url, &state.cache)
+            .await
             .unwrap_or_default();
         let pool_ip = sanitize_ipv4(&pool_ip);
 
-        debug!("Worker lease request from {}, mining pool IP: {}", caller_ip, pool_ip);
+        debug!(
+            "Worker lease request from {}, mining pool IP: {}",
+            caller_ip, pool_ip
+        );
 
         if caller_ip != pool_ip {
-            warn!("Access denied: {} does not match mining pool IP {}", caller_ip, pool_ip);
+            warn!(
+                "Access denied: {} does not match mining pool IP {}",
+                caller_ip, pool_ip
+            );
             return Err(AppError::Unauthorized(format!(
                 "Worker does not accept lease requests from {}",
                 caller_ip

@@ -76,7 +76,9 @@ pub async fn login(
     match generate_token(&state.config.jwt_secret) {
         Ok(token) => (
             StatusCode::OK,
-            Json(serde_json::json!({ "success": true, "message": "登录成功", "data": { "token": token } })),
+            Json(
+                serde_json::json!({ "success": true, "message": "登录成功", "data": { "token": token } }),
+            ),
         ),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -111,9 +113,7 @@ pub async fn update_password(
 }
 
 /// GET /api/auth/check — Public endpoint to check if auth is required
-pub async fn auth_check(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn auth_check(State(state): State<AppState>) -> impl IntoResponse {
     let required = !state.config.login_password.is_empty();
     Json(serde_json::json!({ "auth_required": required }))
 }
@@ -133,7 +133,11 @@ pub async fn auth_middleware(
     let secret = &state.config.jwt_secret;
 
     // Check Authorization header
-    if let Some(auth) = req.headers().get("Authorization").and_then(|h| h.to_str().ok()) {
+    if let Some(auth) = req
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+    {
         if let Some(token) = auth.strip_prefix("Bearer ") {
             if verify_token(token, secret) {
                 return Ok(next.run(req).await);

@@ -1,7 +1,7 @@
+use crate::db::DbPool;
 use crate::error::AppError;
 use crate::sync::locks::NamedLockManager;
 use rand::seq::IndexedRandom;
-use crate::db::DbPool;
 use sqlx::FromRow;
 use std::time::Duration;
 use tracing::info;
@@ -237,9 +237,7 @@ pub async fn write_socks(pool: &DbPool, socks: &[Socks5Config]) -> Result<(), Ap
     // Delete configs not in the current batch
     let usernames: Vec<String> = socks.iter().map(|s| s.username.clone()).collect();
     if !usernames.is_empty() {
-        let placeholders: Vec<String> = (1..=usernames.len())
-            .map(|i| format!("${}", i))
-            .collect();
+        let placeholders: Vec<String> = (1..=usernames.len()).map(|i| format!("${}", i)).collect();
         let sql = format!(
             "DELETE FROM worker_socks5_configs WHERE username NOT IN ({})",
             placeholders.join(", ")

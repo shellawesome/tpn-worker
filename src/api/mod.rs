@@ -1,9 +1,9 @@
 pub mod admin;
 pub mod auth;
 pub mod control;
+pub mod dashboard;
 pub mod health;
 pub mod lease;
-pub mod status;
-pub mod dashboard;
 pub mod logs;
+pub mod status;
 pub mod upgrade;

@@ -43,7 +43,10 @@ impl NamedLockManager {
         let guard = tokio::time::timeout(timeout, mutex.lock())
             .await
             .map_err(|_| {
-                AppError::Internal(format!("Lock acquisition timeout after {:?}: {}", timeout, name))
+                AppError::Internal(format!(
+                    "Lock acquisition timeout after {:?}: {}",
+                    timeout, name
+                ))
             })?;
         let result = f().await;
         drop(guard);

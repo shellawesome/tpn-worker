@@ -1,11 +1,11 @@
 use crate::config::AppConfig;
+use crate::db::DbPool;
 use crate::db::{socks5, wireguard as db_wg};
 use crate::error::AppError;
 use crate::service::cache::TtlCache;
 use crate::sync::locks::NamedLockManager;
 use crate::wireguard::peer_manager;
 use crate::wireguard::server::WireGuardServer;
-use crate::db::DbPool;
 use std::sync::Arc;
 use tracing::info;
 
@@ -49,12 +49,16 @@ pub async fn get_worker_config(
                 let peer_id: i32 = ref_val.parse().map_err(|_| {
                     AppError::Validation("Invalid extend_ref for wireguard: must be numeric".into())
                 })?;
-                info!("Extending WireGuard lease peer{} to {}", peer_id, new_expires_at);
-                let result = db_wg::extend_wireguard_lease(pool, peer_id, expected, new_expires_at).await?;
+                info!(
+                    "Extending WireGuard lease peer{} to {}",
+                    peer_id, new_expires_at
+                );
+                let result =
+                    db_wg::extend_wireguard_lease(pool, peer_id, expected, new_expires_at).await?;
 
-                let server = wg_server.as_ref().ok_or_else(|| {
-                    AppError::Internal("WireGuard server not available".into())
-                })?;
+                let server = wg_server
+                    .as_ref()
+                    .ok_or_else(|| AppError::Internal("WireGuard server not available".into()))?;
                 let peer_cfg = server.get_client_config(peer_id as u16).await?;
                 let (config_text, config_json) = format_peer_config(&peer_cfg, format);
 
@@ -68,7 +72,8 @@ pub async fn get_worker_config(
             "socks5" => {
                 let username = ref_val;
                 info!("Extending SOCKS5 lease {} to {}", username, new_expires_at);
-                let result = socks5::extend_socks5_lease(pool, username, expected, new_expires_at).await?;
+                let result =
+                    socks5::extend_socks5_lease(pool, username, expected, new_expires_at).await?;
 
                 let sock = socks5::read_socks5_config_by_username(pool, username)
                     .await?
@@ -96,8 +101,22 @@ pub async fn get_worker_config(
     } else {
         // New lease branch
         match lease_type {
-            "wireguard" => allocate_wireguard(pool, locks, cache, config, wg_server, lease_seconds, priority, format).await,
-            "socks5" => allocate_socks5(pool, locks, cache, config, lease_seconds, priority, format).await,
+            "wireguard" => {
+                allocate_wireguard(
+                    pool,
+                    locks,
+                    cache,
+                    config,
+                    wg_server,
+                    lease_seconds,
+                    priority,
+                    format,
+                )
+                .await
+            }
+            "socks5" => {
+                allocate_socks5(pool, locks, cache, config, lease_seconds, priority, format).await
+            }
             _ => Err(AppError::Validation(format!(
                 "Invalid type: {}. Must be one of 'wireguard', 'socks5'",
                 lease_type
@@ -124,7 +143,8 @@ async fn allocate_wireguard(
 
     // CI mock mode
     if config.ci_mock_wg_container {
-        let lease = db_wg::register_wireguard_lease(pool, locks, start_id, end_id, expires_at).await?;
+        let lease =
+            db_wg::register_wireguard_lease(pool, locks, start_id, end_id, expires_at).await?;
         let mock_config = serde_json::json!({
             "interface": { "Address": "10.0.0.2/32", "PrivateKey": "mock", "DNS": "1.1.1.1" },
             "peer": { "PublicKey": "mock", "PresharedKey": "mock", "AllowedIPs": "0.0.0.0/0, ::/0", "Endpoint": "127.0.0.1:51820" }
@@ -137,9 +157,9 @@ async fn allocate_wireguard(
         });
     }
 
-    let server = wg_server.as_ref().ok_or_else(|| {
-        AppError::Internal("WireGuard server not available".into())
-    })?;
+    let server = wg_server
+        .as_ref()
+        .ok_or_else(|| AppError::Internal("WireGuard server not available".into()))?;
 
     // Allocate peer: reserve DB slot + add to WG interface
     let allocation =

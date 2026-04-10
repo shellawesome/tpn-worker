@@ -13,9 +13,7 @@ pub fn ip_from_socket(addr: &SocketAddr) -> String {
 pub fn sanitize_ipv4(ip: &str) -> String {
     let trimmed = ip.trim();
     // Strip IPv4-mapped IPv6 prefix
-    let stripped = trimmed
-        .strip_prefix("::ffff:")
-        .unwrap_or(trimmed);
+    let stripped = trimmed.strip_prefix("::ffff:").unwrap_or(trimmed);
     // Convert IPv6 loopback to IPv4 loopback
     if stripped == "::1" {
         return "127.0.0.1".to_string();

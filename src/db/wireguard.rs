@@ -22,33 +22,36 @@ pub async fn register_wireguard_lease(
     expires_at: i64,
 ) -> Result<WgLease, AppError> {
     locks
-        .with_lock("register_wireguard_lease", Duration::from_secs(60), || async {
-            // First attempt: find a free slot
-            if let Some(lease) = try_allocate(pool, start_id, end_id, expires_at).await? {
-                return Ok(lease);
-            }
+        .with_lock(
+            "register_wireguard_lease",
+            Duration::from_secs(60),
+            || async {
+                // First attempt: find a free slot
+                if let Some(lease) = try_allocate(pool, start_id, end_id, expires_at).await? {
+                    return Ok(lease);
+                }
 
-            // Pool exhausted — clean up expired and retry
-            info!("All WireGuard slots occupied, cleaning up expired configs...");
-            cleanup_expired_wireguard_configs(pool).await?;
+                // Pool exhausted — clean up expired and retry
+                info!("All WireGuard slots occupied, cleaning up expired configs...");
+                cleanup_expired_wireguard_configs(pool).await?;
 
-            if let Some(lease) = try_allocate(pool, start_id, end_id, expires_at).await? {
-                return Ok(lease);
-            }
+                if let Some(lease) = try_allocate(pool, start_id, end_id, expires_at).await? {
+                    return Ok(lease);
+                }
 
-            // Still full — report earliest expiry for diagnostics
-            let earliest: Option<i64> = sqlx::query_scalar(
-                "SELECT MIN(expires_at) FROM worker_wireguard_configs",
-            )
-            .fetch_one(pool)
-            .await
-            .ok();
+                // Still full — report earliest expiry for diagnostics
+                let earliest: Option<i64> =
+                    sqlx::query_scalar("SELECT MIN(expires_at) FROM worker_wireguard_configs")
+                        .fetch_one(pool)
+                        .await
+                        .ok();
 
-            Err(AppError::LeaseUnavailable(format!(
-                "All WireGuard peer slots ({}-{}) exhausted. Earliest expiry: {:?}",
-                start_id, end_id, earliest
-            )))
-        })
+                Err(AppError::LeaseUnavailable(format!(
+                    "All WireGuard peer slots ({}-{}) exhausted. Earliest expiry: {:?}",
+                    start_id, end_id, earliest
+                )))
+            },
+        )
         .await
 }
 
@@ -98,7 +101,10 @@ async fn try_allocate(
         "Allocated WireGuard peer {} (expires_at: {})",
         peer_id, expires_at
     );
-    Ok(Some(WgLease { peer_id, expires_at }))
+    Ok(Some(WgLease {
+        peer_id,
+        expires_at,
+    }))
 }
 
 /// Extend an existing WireGuard lease with optimistic locking.
@@ -185,12 +191,11 @@ pub async fn check_open_leases(pool: &DbPool) -> Vec<WgLease> {
 /// Return IDs of expired WireGuard peers (for interface cleanup before DB deletion).
 pub async fn expired_peer_ids(pool: &DbPool) -> Result<Vec<i32>, AppError> {
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let ids: Vec<i32> = sqlx::query_scalar(
-        "SELECT id FROM worker_wireguard_configs WHERE expires_at < $1",
-    )
-    .bind(now_ms)
-    .fetch_all(pool)
-    .await?;
+    let ids: Vec<i32> =
+        sqlx::query_scalar("SELECT id FROM worker_wireguard_configs WHERE expires_at < $1")
+            .bind(now_ms)
+            .fetch_all(pool)
+            .await?;
     Ok(ids)
 }
 

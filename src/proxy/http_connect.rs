@@ -172,7 +172,9 @@ async fn read_headers(stream: &mut TcpStream) -> anyhow::Result<Vec<u8>> {
 /// Parse "Basic <base64(user:pass)>" into (username, password).
 fn parse_basic_auth(value: Option<&str>) -> Option<(String, String)> {
     let value = value?;
-    let value = value.strip_prefix("Basic ").or_else(|| value.strip_prefix("basic "))?;
+    let value = value
+        .strip_prefix("Basic ")
+        .or_else(|| value.strip_prefix("basic "))?;
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(value.trim())
         .ok()?;

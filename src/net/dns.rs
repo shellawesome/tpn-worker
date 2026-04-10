@@ -10,7 +10,10 @@ const DNS_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 /// Resolve a domain to an IPv4 address with caching.
 /// If the input is already an IPv4 address, returns it as-is.
 /// Mirrors `resolve_domain_to_ip` from `modules/networking/network.js`.
-pub async fn resolve_domain_to_ip(url_or_domain: &str, cache: &TtlCache) -> Result<String, AppError> {
+pub async fn resolve_domain_to_ip(
+    url_or_domain: &str,
+    cache: &TtlCache,
+) -> Result<String, AppError> {
     // Extract hostname from URL if needed
     let domain = extract_hostname(url_or_domain);
 
@@ -64,7 +67,10 @@ mod tests {
 
     #[test]
     fn test_extract_hostname() {
-        assert_eq!(extract_hostname("https://example.com:3000/path"), "example.com");
+        assert_eq!(
+            extract_hostname("https://example.com:3000/path"),
+            "example.com"
+        );
         assert_eq!(extract_hostname("http://1.2.3.4:3000"), "1.2.3.4");
         assert_eq!(extract_hostname("example.com:3000"), "example.com");
         assert_eq!(extract_hostname("1.2.3.4"), "1.2.3.4");

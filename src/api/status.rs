@@ -2,8 +2,8 @@ use axum::extract::State;
 use axum::response::Json;
 use serde_json::{json, Value};
 
-use crate::db::wireguard as db_wg;
 use crate::db::socks5;
+use crate::db::wireguard as db_wg;
 use crate::AppState;
 
 /// GET /api/stats — Worker status and statistics.

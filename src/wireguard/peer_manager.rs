@@ -1,8 +1,8 @@
 use crate::db::wireguard as db_wg;
+use crate::db::DbPool;
 use crate::error::AppError;
 use crate::sync::locks::NamedLockManager;
 use crate::wireguard::server::{PeerConfig, WireGuardServer};
-use crate::db::DbPool;
 use tracing::info;
 
 /// Result of a peer allocation.
@@ -48,7 +48,10 @@ pub async fn allocate_peer(
         // Rollback: keys must be persisted for restart recovery
         let _ = server.remove_peer(peer_id as u16).await;
         let _ = db_wg::mark_config_as_free(pool, peer_id, Some(expires_at)).await;
-        return Err(AppError::Internal(format!("Failed to persist peer keys: {}", e)));
+        return Err(AppError::Internal(format!(
+            "Failed to persist peer keys: {}",
+            e
+        )));
     }
 
     info!(
@@ -89,9 +92,8 @@ async fn store_peer_keys(
     allowed_ip: &str,
 ) -> Result<(), AppError> {
     // The client's public key (derived from private) is what the server stores
-    let client_public_key =
-        crate::wireguard::keygen::public_key_from_private(private_key)
-            .map_err(|e| AppError::Internal(format!("Key derivation failed: {}", e)))?;
+    let client_public_key = crate::wireguard::keygen::public_key_from_private(private_key)
+        .map_err(|e| AppError::Internal(format!("Key derivation failed: {}", e)))?;
 
     sqlx::query(
         "UPDATE worker_wireguard_configs

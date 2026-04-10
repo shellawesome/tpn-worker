@@ -7,8 +7,8 @@ type HmacSha256 = Hmac<Sha256>;
 /// Generate a lease extension token by HMAC-SHA256 signing the lease reference.
 /// Mirrors `modules/crypto/lease_token.js`.
 pub fn sign_lease_token(lease_ref: &str, secret: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(lease_ref.as_bytes());
     let result = mac.finalize();
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(result.into_bytes())

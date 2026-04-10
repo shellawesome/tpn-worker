@@ -3,14 +3,13 @@ use crate::db::DbPool;
 
 /// Get a timestamp value by label.
 pub async fn get_timestamp(pool: &DbPool, label: &str) -> Option<i64> {
-    let result: Option<i64> = sqlx::query_scalar(
-        "SELECT timestamp FROM timestamps WHERE label = $1",
-    )
-    .bind(label)
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten();
+    let result: Option<i64> =
+        sqlx::query_scalar("SELECT timestamp FROM timestamps WHERE label = $1")
+            .bind(label)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
     result
 }
 

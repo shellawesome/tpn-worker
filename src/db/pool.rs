@@ -21,9 +21,7 @@ pub async fn create_pool(config: &AppConfig) -> Result<DbPool, sqlx::Error> {
     sqlx::query("PRAGMA busy_timeout=5000")
         .execute(&pool)
         .await?;
-    sqlx::query("PRAGMA foreign_keys=ON")
-        .execute(&pool)
-        .await?;
+    sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
 
     info!("SQLite database ready (WAL mode)");
     Ok(pool)

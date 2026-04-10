@@ -1,8 +1,8 @@
 use crate::db::socks5::{self, Socks5Config};
+use crate::db::DbPool;
 use crate::error::AppError;
 use dashmap::DashMap;
 use rand::Rng;
-use crate::db::DbPool;
 use std::path::Path;
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
@@ -54,10 +54,7 @@ impl CredentialManager {
             });
             let mut found = false;
             while let Ok(Some(entry)) = entries.next_entry().await {
-                if entry
-                    .file_name()
-                    .to_string_lossy()
-                    .ends_with(".password")
+                if entry.file_name().to_string_lossy().ends_with(".password")
                     && !entry
                         .file_name()
                         .to_string_lossy()
