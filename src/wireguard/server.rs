@@ -1,20 +1,17 @@
 use crate::config::AppConfig;
+use crate::db::DbPool;
 use crate::error::AppError;
 use crate::wireguard::keygen;
 use defguard_wireguard_rs::{
-    InterfaceConfiguration, WGApi, WireguardInterfaceApi,
-    key::Key,
-    net::IpAddrMask,
-    peer::Peer,
+    key::Key, net::IpAddrMask, peer::Peer, InterfaceConfiguration, WGApi, WireguardInterfaceApi,
 };
-use crate::db::DbPool;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// State for a single WireGuard peer on the server.
 #[derive(Debug, Clone)]
@@ -103,17 +100,26 @@ impl WireGuardServer {
         // 1. Load WireGuard kernel module (no-op if already loaded or built-in)
         if !Path::new("/sys/module/wireguard").exists() {
             info!("WireGuard kernel module not loaded, attempting modprobe...");
-            match std::process::Command::new("modprobe").arg("wireguard").output() {
+            match std::process::Command::new("modprobe")
+                .arg("wireguard")
+                .output()
+            {
                 Ok(output) if output.status.success() => {
                     info!("WireGuard kernel module loaded successfully");
                 }
                 Ok(output) => {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     // Not fatal — kernel >= 5.6 has it built-in, /sys/module may not appear
-                    warn!("modprobe wireguard: {} (may be built-in, continuing)", stderr.trim());
+                    warn!(
+                        "modprobe wireguard: {} (may be built-in, continuing)",
+                        stderr.trim()
+                    );
                 }
                 Err(e) => {
-                    warn!("Could not run modprobe: {} (may be built-in, continuing)", e);
+                    warn!(
+                        "Could not run modprobe: {} (may be built-in, continuing)",
+                        e
+                    );
                 }
             }
         } else {
@@ -179,8 +185,7 @@ impl WireGuardServer {
         let dns = config.wg_dns.clone();
 
         // Load or generate server keypair
-        let (server_private_key, server_public_key) =
-            load_or_create_server_keys(pool).await?;
+        let (server_private_key, server_public_key) = load_or_create_server_keys(pool).await?;
 
         let api = WGApi::<defguard_wireguard_rs::Kernel>::new(interface_name.clone())
             .map_err(|e| AppError::Internal(format!("Failed to create WGApi: {}", e)))?;
@@ -212,8 +217,9 @@ impl WireGuardServer {
         let interface_config = InterfaceConfiguration {
             name: self.interface_name.clone(),
             prvkey: self.server_private_key.clone(),
-            addresses: vec![server_ip.parse()
-                .map_err(|e| AppError::Internal(format!("Invalid server IP '{}': {}", server_ip, e)))?],
+            addresses: vec![server_ip.parse().map_err(|e| {
+                AppError::Internal(format!("Invalid server IP '{}': {}", server_ip, e))
+            })?],
             port: self.listen_port,
             peers: vec![],
             mtu: None,
@@ -239,7 +245,10 @@ impl WireGuardServer {
         // Enable IP forwarding
         match std::fs::write("/proc/sys/net/ipv4/ip_forward", "1") {
             Ok(_) => info!("Enabled IPv4 forwarding"),
-            Err(e) => error!("Failed to enable IPv4 forwarding: {} (run as root or set manually)", e),
+            Err(e) => error!(
+                "Failed to enable IPv4 forwarding: {} (run as root or set manually)",
+                e
+            ),
         }
 
         // Detect default outbound interface
@@ -248,24 +257,55 @@ impl WireGuardServer {
 
         // Add MASQUERADE rule for WireGuard subnet
         let status = std::process::Command::new("iptables")
-            .args(["-t", "nat", "-C", "POSTROUTING", "-s", &subnet, "-o", &outbound_iface, "-j", "MASQUERADE"])
+            .args([
+                "-t",
+                "nat",
+                "-C",
+                "POSTROUTING",
+                "-s",
+                &subnet,
+                "-o",
+                &outbound_iface,
+                "-j",
+                "MASQUERADE",
+            ])
             .output();
 
         let rule_exists = status.map(|o| o.status.success()).unwrap_or(false);
 
         if !rule_exists {
             match std::process::Command::new("iptables")
-                .args(["-t", "nat", "-A", "POSTROUTING", "-s", &subnet, "-o", &outbound_iface, "-j", "MASQUERADE"])
+                .args([
+                    "-t",
+                    "nat",
+                    "-A",
+                    "POSTROUTING",
+                    "-s",
+                    &subnet,
+                    "-o",
+                    &outbound_iface,
+                    "-j",
+                    "MASQUERADE",
+                ])
                 .output()
             {
                 Ok(output) if output.status.success() => {
-                    info!("Added NAT MASQUERADE rule for {} via {}", subnet, outbound_iface);
+                    info!(
+                        "Added NAT MASQUERADE rule for {} via {}",
+                        subnet, outbound_iface
+                    );
                 }
                 Ok(output) => {
-                    error!("Failed to add NAT rule: {}", String::from_utf8_lossy(&output.stderr));
+                    error!(
+                        "Failed to add NAT rule: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                 }
                 Err(e) => {
-                    error!("Failed to run iptables: {} (ensure iptables is installed)", e);
+                    error!(
+                        "Failed to run iptables: {} (ensure iptables is installed)",
+                        e
+                    );
                 }
             }
         } else {
@@ -289,7 +329,10 @@ impl WireGuardServer {
                     info!("Added route {} dev {}", subnet, self.interface_name);
                 }
                 Ok(output) => {
-                    error!("Failed to add route: {}", String::from_utf8_lossy(&output.stderr));
+                    error!(
+                        "Failed to add route: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                 }
                 Err(e) => {
                     error!("Failed to run ip route: {}", e);
@@ -315,17 +358,101 @@ impl WireGuardServer {
             });
 
         let _ = std::process::Command::new("iptables")
-            .args(["-C", "FORWARD", "-o", wg_iface, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
+            .args([
+                "-C",
+                "FORWARD",
+                "-o",
+                wg_iface,
+                "-m",
+                "state",
+                "--state",
+                "ESTABLISHED,RELATED",
+                "-j",
+                "ACCEPT",
+            ])
             .output()
             .and_then(|o| {
                 if !o.status.success() {
                     std::process::Command::new("iptables")
-                        .args(["-A", "FORWARD", "-o", wg_iface, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
+                        .args([
+                            "-A",
+                            "FORWARD",
+                            "-o",
+                            wg_iface,
+                            "-m",
+                            "state",
+                            "--state",
+                            "ESTABLISHED,RELATED",
+                            "-j",
+                            "ACCEPT",
+                        ])
                         .output()
                 } else {
                     Ok(o)
                 }
             });
+
+        // Accept inbound WireGuard handshake traffic on the public UDP port.
+        let port = self.listen_port.to_string();
+        let _ = std::process::Command::new("iptables")
+            .args(["-C", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT"])
+            .output()
+            .and_then(|o| {
+                if !o.status.success() {
+                    std::process::Command::new("iptables")
+                        .args(["-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT"])
+                        .output()
+                } else {
+                    Ok(o)
+                }
+            });
+    }
+
+    /// Best-effort local check that the public WireGuard UDP port is reachable.
+    pub fn wait_for_public_udp_reachability(&self, max_wait_ms: u64) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed().as_millis() < max_wait_ms as u128 {
+            if self.check_public_udp_reachability() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+        false
+    }
+
+    fn check_public_udp_reachability(&self) -> bool {
+        if self.endpoint_host.trim().is_empty() {
+            warn!("Skipping WireGuard reachability check: SERVER_PUBLIC_HOST is empty");
+            return false;
+        }
+
+        let output = std::process::Command::new("nc")
+            .args([
+                "-vzu",
+                "-w",
+                "10",
+                self.endpoint_host.as_str(),
+                self.listen_port.to_string().as_str(),
+            ])
+            .output();
+
+        match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let combined = format!("{stdout} {stderr}");
+                let reachable = combined.contains("succeeded");
+                info!(
+                    "WireGuard public UDP reachability check host={} port={} reachable={}",
+                    self.endpoint_host, self.listen_port, reachable
+                );
+                reachable
+            }
+            Err(e) => {
+                warn!("WireGuard reachability check failed to run nc: {}", e);
+                false
+            }
+        }
     }
 
     /// Restore active peers from the database on restart.
@@ -356,7 +483,10 @@ impl WireGuardServer {
                 .unwrap_or_else(|| self.peer_ip(peer_id).to_string());
 
             // Add peer to the WireGuard interface
-            if let Err(e) = self.add_peer_to_interface(&pub_key, &psk, &allowed_ip_str).await {
+            if let Err(e) = self
+                .add_peer_to_interface(&pub_key, &psk, &allowed_ip_str)
+                .await
+            {
                 warn!("Failed to restore peer {}: {}", peer_id, e);
                 continue;
             }
@@ -386,7 +516,8 @@ impl WireGuardServer {
         let allowed_ip_str = format!("{}/32", allowed_ip);
 
         // Add to WireGuard interface
-        self.add_peer_to_interface(&keypair.public_key, &psk, &allowed_ip_str).await?;
+        self.add_peer_to_interface(&keypair.public_key, &psk, &allowed_ip_str)
+            .await?;
 
         // Store in memory
         let state = PeerState {
@@ -426,8 +557,9 @@ impl WireGuardServer {
                 .map_err(|e| AppError::Internal(format!("Key conversion failed: {}", e)))?;
 
             let api = self.api.lock().await;
-            api.remove_peer(&key)
-                .map_err(|e| AppError::Internal(format!("Failed to remove peer {}: {}", peer_id, e)))?;
+            api.remove_peer(&key).map_err(|e| {
+                AppError::Internal(format!("Failed to remove peer {}: {}", peer_id, e))
+            })?;
         }
 
         info!("Removed WireGuard peer {}", peer_id);
@@ -488,7 +620,13 @@ impl WireGuardServer {
 
     fn server_address(&self) -> String {
         let octets = self.subnet_base.octets();
-        format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3] + 1)
+        format!(
+            "{}.{}.{}.{}",
+            octets[0],
+            octets[1],
+            octets[2],
+            octets[3] + 1
+        )
     }
 
     fn peer_ip(&self, peer_id: u16) -> Ipv4Addr {
@@ -505,11 +643,9 @@ impl WireGuardServer {
         preshared_key_b64: &str,
         allowed_ip: &str,
     ) -> Result<(), AppError> {
-        let key_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            public_key_b64,
-        )
-        .map_err(|e| AppError::Internal(format!("Invalid public key base64: {}", e)))?;
+        let key_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, public_key_b64)
+                .map_err(|e| AppError::Internal(format!("Invalid public key base64: {}", e)))?;
         let key: Key = key_bytes
             .as_slice()
             .try_into()
@@ -532,8 +668,9 @@ impl WireGuardServer {
         }
 
         // Set allowed IPs
-        let addr = IpAddrMask::from_str(allowed_ip)
-            .map_err(|e| AppError::Internal(format!("Invalid allowed IP '{}': {}", allowed_ip, e)))?;
+        let addr = IpAddrMask::from_str(allowed_ip).map_err(|e| {
+            AppError::Internal(format!("Invalid allowed IP '{}': {}", allowed_ip, e))
+        })?;
         peer.allowed_ips.push(addr);
 
         // Set persistent keepalive (25 seconds, standard for NAT traversal)

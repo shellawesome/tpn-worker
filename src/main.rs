@@ -265,8 +265,7 @@ async fn main() {
         let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
 
-        let stdout_layer = tracing_subscriber::fmt::layer()
-            .with_target(false);
+        let stdout_layer = tracing_subscriber::fmt::layer().with_target(false);
 
         let log_file = std::fs::OpenOptions::new()
             .create(true)
@@ -305,42 +304,53 @@ async fn main() {
     }
 
     // 5. Start embedded WireGuard server (worker mode only)
-    let wg_server: Option<Arc<WireGuardServer>> = if config.is_worker() && !config.ci_mock_wg_container {
-        // Preflight: ensure kernel module, /dev/net/tun, and required tools
-        if let Err(e) = WireGuardServer::preflight_check() {
-            error!("WireGuard environment check failed: {}", e);
-            std::process::exit(1);
-        }
-
-        info!("Starting embedded WireGuard server...");
-        match WireGuardServer::new(&config, &pool).await {
-            Ok(server) => {
-                if let Err(e) = server.start().await {
-                    error!("Failed to start WireGuard server: {}", e);
-                    std::process::exit(1);
-                }
-
-                // Restore active peers from DB
-                match server.restore_peers(&pool).await {
-                    Ok(count) => info!("Restored {} WireGuard peers", count),
-                    Err(e) => warn!("Failed to restore WireGuard peers: {}", e),
-                }
-
-                let server = Arc::new(server);
-                info!("WireGuard server started on port {}", config.wireguard_server_port);
-                Some(server)
-            }
-            Err(e) => {
-                error!("Failed to create WireGuard server: {}", e);
+    let wg_server: Option<Arc<WireGuardServer>> =
+        if config.is_worker() && !config.ci_mock_wg_container {
+            // Preflight: ensure kernel module, /dev/net/tun, and required tools
+            if let Err(e) = WireGuardServer::preflight_check() {
+                error!("WireGuard environment check failed: {}", e);
                 std::process::exit(1);
             }
-        }
-    } else {
-        if config.ci_mock_wg_container {
-            info!("CI mock mode: skipping WireGuard server");
-        }
-        None
-    };
+
+            info!("Starting embedded WireGuard server...");
+            match WireGuardServer::new(&config, &pool).await {
+                Ok(server) => {
+                    if let Err(e) = server.start().await {
+                        error!("Failed to start WireGuard server: {}", e);
+                        std::process::exit(1);
+                    }
+
+                    // Restore active peers from DB
+                    match server.restore_peers(&pool).await {
+                        Ok(count) => info!("Restored {} WireGuard peers", count),
+                        Err(e) => warn!("Failed to restore WireGuard peers: {}", e),
+                    }
+
+                    if !server.wait_for_public_udp_reachability(120_000) {
+                        warn!(
+                        "WireGuard public UDP port {} on {} did not become reachable within 120s",
+                        config.wireguard_server_port, config.server_public_host
+                    );
+                    }
+
+                    let server = Arc::new(server);
+                    info!(
+                        "WireGuard server started on port {}",
+                        config.wireguard_server_port
+                    );
+                    Some(server)
+                }
+                Err(e) => {
+                    error!("Failed to create WireGuard server: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            if config.ci_mock_wg_container {
+                info!("CI mock mode: skipping WireGuard server");
+            }
+            None
+        };
 
     // 6. Initialize CredentialManager (Phase 2: replaces Dante container)
     let credentials = Arc::new(CredentialManager::new(
@@ -423,7 +433,10 @@ async fn main() {
         .route("/api/start", post(api::control::start_worker))
         .route("/api/restart", post(api::control::restart_worker))
         .route("/api/password", post(api::auth::update_password))
-        .route_layer(middleware::from_fn_with_state(state.clone(), api::auth::auth_middleware));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            api::auth::auth_middleware,
+        ));
 
     // Public routes (no auth required)
     let app = Router::new()
@@ -438,8 +451,14 @@ async fn main() {
     // 10. Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
     info!("HTTP server listening on {}", addr);
-    info!("Dashboard available at http://{}:{}/dashboard", config.server_public_host, config.server_port);
-    info!("Dashboard API at http://{}:{}/api/dashboard", config.server_public_host, config.server_port);
+    info!(
+        "Dashboard available at http://{}:{}/dashboard",
+        config.server_public_host, config.server_port
+    );
+    info!(
+        "Dashboard API at http://{}:{}/api/dashboard",
+        config.server_public_host, config.server_port
+    );
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -488,7 +507,12 @@ async fn main() {
             ticker.tick().await;
 
             // Database cleanup (removes expired WG peers from kernel interface too)
-            db::cleanup::database_cleanup(&state_daemon.db, &state_daemon.config, &state_daemon.wg_server).await;
+            db::cleanup::database_cleanup(
+                &state_daemon.db,
+                &state_daemon.config,
+                &state_daemon.wg_server,
+            )
+            .await;
 
             // Sync credential store after cleanup
             if let Err(e) = creds_daemon.reload_from_db().await {

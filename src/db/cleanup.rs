@@ -2,10 +2,9 @@ use crate::config::{AppConfig, RunMode};
 use crate::db::{wireguard as db_wg, DbPool};
 use crate::wireguard::server::WireGuardServer;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Staleness thresholds in milliseconds.
-const STALE_90_MIN_MS: i64 = 90 * 60 * 1000;
 const STALE_1_YEAR_MS: i64 = 365 * 24 * 60 * 60 * 1000;
 
 /// Periodic cleanup of stale database records.
@@ -28,19 +27,25 @@ pub async fn database_cleanup(
                 Ok(ids) => {
                     for id in &ids {
                         if let Err(e) = server.remove_peer(*id as u16).await {
-                            warn!("Failed to remove expired WG peer {} from interface: {}", id, e);
+                            warn!(
+                                "Failed to remove expired WG peer {} from interface: {}",
+                                id, e
+                            );
                         }
                     }
                     if !ids.is_empty() {
-                        info!("Removed {} expired peers from WireGuard interface", ids.len());
+                        info!(
+                            "Removed {} expired peers from WireGuard interface",
+                            ids.len()
+                        );
                     }
                 }
                 Err(e) => warn!("Failed to query expired WG peers: {}", e),
             }
         }
 
-        // 2. Then delete DB rows
-        cleanup_table(pool, "worker_wireguard_configs", "expires_at", now_ms - STALE_90_MIN_MS).await;
+        // 2. Then delete DB rows immediately once the lease expires.
+        cleanup_table(pool, "worker_wireguard_configs", "expires_at", now_ms).await;
     }
 }
 

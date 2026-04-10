@@ -1,11 +1,11 @@
 use crate::config::AppConfig;
 use crate::db::registration_log;
+use crate::db::DbPool;
 use crate::error::AppError;
 use crate::service::cache::TtlCache;
 use crate::service::lease_manager;
 use crate::sync::locks::NamedLockManager;
 use crate::wireguard::server::WireGuardServer;
-use crate::db::DbPool;
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -35,10 +35,20 @@ pub async fn register_with_mining_pool(
     // Try to attach a WireGuard config (120s lease for registration probe)
     // Mining pool expects wireguard_config as text (INI format), not JSON
     match lease_manager::get_worker_config(
-        pool, locks, cache, config, wg_server,
-        "wireguard", 120, false, "text",
-        None, None,
-    ).await {
+        pool,
+        locks,
+        cache,
+        config,
+        wg_server,
+        "wireguard",
+        120,
+        false,
+        "text",
+        None,
+        None,
+    )
+    .await
+    {
         Ok(lease) => {
             if let Some(text_config) = lease.config_text {
                 worker["wireguard_config"] = serde_json::Value::String(text_config);
@@ -52,10 +62,10 @@ pub async fn register_with_mining_pool(
     // Try to attach a SOCKS5 config
     // Mining pool expects text format: socks5://user:pass@ip:port
     match lease_manager::get_worker_config(
-        pool, locks, cache, config, wg_server,
-        "socks5", 120, false, "text",
-        None, None,
-    ).await {
+        pool, locks, cache, config, wg_server, "socks5", 120, false, "text", None, None,
+    )
+    .await
+    {
         Ok(lease) => {
             if let Some(text_config) = lease.config_text {
                 worker["socks5_config"] = serde_json::Value::String(text_config);
@@ -69,7 +79,10 @@ pub async fn register_with_mining_pool(
     // POST to mining pool
     let query = format!("{}/miner/broadcast/worker", mining_pool_url);
     info!("Posting worker registration to {}", query);
-    info!("Registration payload: {}", serde_json::to_string_pretty(&worker).unwrap_or_default());
+    info!(
+        "Registration payload: {}",
+        serde_json::to_string_pretty(&worker).unwrap_or_default()
+    );
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
@@ -94,7 +107,11 @@ pub async fn register_with_mining_pool(
     let body: serde_json::Value = serde_json::from_str(&body_text)
         .map_err(|e| AppError::Internal(format!("Failed to parse mining pool response: {}", e)))?;
 
-    let registered = body.get("registered").and_then(|v| v.as_bool()).unwrap_or(false);
+    let registered = body
+        .get("registered")
+        .and_then(|v| v.as_bool())
+        .or_else(|| body.get("success").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
 
     let error_msg = body.get("error").and_then(|v| v.as_str()).unwrap_or("");
     if !error_msg.is_empty() {
