@@ -46,6 +46,53 @@ pub async fn resolve_domain_to_ip(
     Ok(sanitized)
 }
 
+/// Resolve a domain to all IPv4 addresses with caching.
+/// Returns a de-duplicated, sanitized list in stable order.
+pub async fn resolve_domain_to_ipv4s(
+    url_or_domain: &str,
+    cache: &TtlCache,
+) -> Result<Vec<String>, AppError> {
+    let domain = extract_hostname(url_or_domain);
+
+    if is_valid_ipv4(&domain) {
+        return Ok(vec![sanitize_ipv4(&domain)]);
+    }
+
+    let cache_key = format!("resolved_domain_ipv4s_{}", domain);
+    if let Some(cached) = cache.get_string(&cache_key) {
+        let values = cached
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(sanitize_ipv4)
+            .collect::<Vec<_>>();
+        if !values.is_empty() {
+            return Ok(values);
+        }
+    }
+
+    info!("Resolving all IPv4 addresses for domain: {}", domain);
+    let mut resolved = tokio::net::lookup_host(format!("{}:0", domain))
+        .await
+        .map_err(|e| AppError::Internal(format!("DNS resolution failed for {}: {}", domain, e)))?
+        .filter(|addr| addr.is_ipv4())
+        .map(|addr| sanitize_ipv4(&addr.ip().to_string()))
+        .collect::<Vec<_>>();
+
+    resolved.sort();
+    resolved.dedup();
+
+    if resolved.is_empty() {
+        return Err(AppError::Internal(format!(
+            "No IPv4 address found for {}",
+            domain
+        )));
+    }
+
+    cache.set_string(&cache_key, &resolved.join(","), Some(DNS_CACHE_TTL));
+    Ok(resolved)
+}
+
 /// Extract hostname from a URL string.
 /// "https://example.com:3000/path" → "example.com"
 /// "example.com" → "example.com"

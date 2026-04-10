@@ -8,8 +8,8 @@ use tracing::{debug, info, warn};
 
 use crate::crypto::lease_token;
 use crate::error::AppError;
-use crate::net::dns::resolve_domain_to_ip;
-use crate::net::ip::sanitize_ipv4;
+use crate::net::dns::resolve_domain_to_ipv4s;
+use crate::net::ip::{is_local_ip, sanitize_ipv4};
 use crate::service::lease_manager;
 use crate::AppState;
 
@@ -44,20 +44,25 @@ pub async fn lease_new(
         info!("Checking if caller is mining pool: {}", mining_pool_url);
 
         let caller_ip = sanitize_ipv4(&addr.ip().to_string());
-        let pool_ip = resolve_domain_to_ip(&mining_pool_url, &state.cache)
+        let allowed_pool_ips = resolve_domain_to_ipv4s(&mining_pool_url, &state.cache)
             .await
             .unwrap_or_default();
-        let pool_ip = sanitize_ipv4(&pool_ip);
+        let local_request = is_local_ip(
+            &caller_ip,
+            &config.tpn_internal_subnet,
+            &config.tpn_external_subnet,
+        );
+        let ip_match = allowed_pool_ips.iter().any(|ip| ip == &caller_ip);
 
         debug!(
-            "Worker lease request from {}, mining pool IP: {}",
-            caller_ip, pool_ip
+            "Worker lease request from {}, allowed pool IPs: {:?}, local_request: {}, match: {}",
+            caller_ip, allowed_pool_ips, local_request, ip_match
         );
 
-        if caller_ip != pool_ip {
+        if !ip_match && !local_request {
             warn!(
-                "Access denied: {} does not match mining pool IP {}",
-                caller_ip, pool_ip
+                "Access denied: {} does not match allowed mining pool IPs {:?}",
+                caller_ip, allowed_pool_ips
             );
             return Err(AppError::Unauthorized(format!(
                 "Worker does not accept lease requests from {}",
