@@ -5,6 +5,7 @@ use clap::Parser;
 use db::DbPool;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
@@ -135,6 +136,47 @@ PAYMENT_ADDRESS_BITTENSOR=5EtYnZcY1UFbkwCp3HL5W3bxZCJshKtYVcTsWtB9QUtPTXxA
 # DAEMON_INTERVAL_SECONDS=300
 "#
     )
+}
+
+fn ensure_tcp_input_accept(port: u16, label: &str) {
+    let port_str = port.to_string();
+
+    let exists = Command::new("iptables")
+        .args([
+            "-C", "INPUT", "-p", "tcp", "--dport", &port_str, "-j", "ACCEPT",
+        ])
+        .output();
+
+    let rule_exists = exists.map(|o| o.status.success()).unwrap_or(false);
+    if rule_exists {
+        info!(
+            "Firewall INPUT rule already exists for {} tcp/{}",
+            label, port
+        );
+        return;
+    }
+
+    match Command::new("iptables")
+        .args([
+            "-A", "INPUT", "-p", "tcp", "--dport", &port_str, "-j", "ACCEPT",
+        ])
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            info!("Opened firewall INPUT for {} tcp/{}", label, port);
+        }
+        Ok(output) => {
+            warn!(
+                "Failed to open firewall INPUT for {} tcp/{}: {}",
+                label,
+                port,
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Err(e) => {
+            warn!("Failed to run iptables for {} tcp/{}: {}", label, port, e);
+        }
+    }
 }
 
 /// If .env does not exist, generate the default template.
@@ -304,53 +346,59 @@ async fn main() {
     }
 
     // 5. Start embedded WireGuard server (worker mode only)
-    let wg_server: Option<Arc<WireGuardServer>> =
-        if config.is_worker() && !config.ci_mock_wg_container {
-            // Preflight: ensure kernel module, /dev/net/tun, and required tools
-            if let Err(e) = WireGuardServer::preflight_check() {
-                error!("WireGuard environment check failed: {}", e);
-                std::process::exit(1);
-            }
+    let wg_server: Option<Arc<WireGuardServer>> = if config.is_worker()
+        && !config.ci_mock_wg_container
+    {
+        // Preflight: ensure kernel module, /dev/net/tun, and required tools
+        if let Err(e) = WireGuardServer::preflight_check() {
+            error!("WireGuard environment check failed: {}", e);
+            std::process::exit(1);
+        }
 
-            info!("Starting embedded WireGuard server...");
-            match WireGuardServer::new(&config, &pool).await {
-                Ok(server) => {
-                    if let Err(e) = server.start().await {
-                        error!("Failed to start WireGuard server: {}", e);
-                        std::process::exit(1);
-                    }
-
-                    // Restore active peers from DB
-                    match server.restore_peers(&pool).await {
-                        Ok(count) => info!("Restored {} WireGuard peers", count),
-                        Err(e) => warn!("Failed to restore WireGuard peers: {}", e),
-                    }
-
-                    if !server.wait_for_public_udp_reachability(120_000) {
-                        warn!(
-                        "WireGuard public UDP port {} on {} did not become reachable within 120s",
-                        config.wireguard_server_port, config.server_public_host
-                    );
-                    }
-
-                    let server = Arc::new(server);
-                    info!(
-                        "WireGuard server started on port {}",
-                        config.wireguard_server_port
-                    );
-                    Some(server)
-                }
-                Err(e) => {
-                    error!("Failed to create WireGuard server: {}", e);
+        info!("Starting embedded WireGuard server...");
+        match WireGuardServer::new(&config, &pool).await {
+            Ok(server) => {
+                if let Err(e) = server.start().await {
+                    error!("Failed to start WireGuard server: {}", e);
                     std::process::exit(1);
                 }
+
+                // Restore active peers from DB
+                match server.restore_peers(&pool).await {
+                    Ok(count) => info!("Restored {} WireGuard peers", count),
+                    Err(e) => warn!("Failed to restore WireGuard peers: {}", e),
+                }
+
+                if config.wg_public_reachability_check
+                    && !server
+                        .wait_for_public_udp_reachability(config.wg_public_reachability_timeout_ms)
+                {
+                    warn!(
+                        "WireGuard public UDP port {} on {} did not become reachable within {}ms",
+                        config.wireguard_server_port,
+                        config.server_public_host,
+                        config.wg_public_reachability_timeout_ms
+                    );
+                }
+
+                let server = Arc::new(server);
+                info!(
+                    "WireGuard server started on port {}",
+                    config.wireguard_server_port
+                );
+                Some(server)
             }
-        } else {
-            if config.ci_mock_wg_container {
-                info!("CI mock mode: skipping WireGuard server");
+            Err(e) => {
+                error!("Failed to create WireGuard server: {}", e);
+                std::process::exit(1);
             }
-            None
-        };
+        }
+    } else {
+        if config.ci_mock_wg_container {
+            info!("CI mock mode: skipping WireGuard server");
+        }
+        None
+    };
 
     // 6. Initialize CredentialManager (Phase 2: replaces Dante container)
     let credentials = Arc::new(CredentialManager::new(
@@ -371,6 +419,10 @@ async fn main() {
     let shutdown_token = CancellationToken::new();
 
     if config.is_worker() {
+        ensure_tcp_input_accept(config.socks5_port, "SOCKS5");
+        ensure_tcp_input_accept(config.http_proxy_port, "HTTP CONNECT");
+        ensure_tcp_input_accept(config.server_port, "worker HTTP");
+
         // SOCKS5 server
         let socks5_addr = SocketAddr::from(([0, 0, 0, 0], config.socks5_port));
         let creds_s5 = credentials.clone();

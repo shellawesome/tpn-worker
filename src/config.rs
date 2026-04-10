@@ -70,6 +70,10 @@ pub struct AppConfig {
     pub wg_subnet: String,
     #[clap(env = "WG_DNS", default_value = "1.1.1.1")]
     pub wg_dns: String,
+    #[clap(env = "WG_PUBLIC_REACHABILITY_CHECK")]
+    pub wg_public_reachability_check: bool,
+    #[clap(env = "WG_PUBLIC_REACHABILITY_TIMEOUT_MS", default_value = "120000")]
+    pub wg_public_reachability_timeout_ms: u64,
 
     // SOCKS5 / Proxy (Phase 2: embedded proxy replaces Dante + 3proxy)
     #[clap(env = "SOCKS5_PORT", default_value = "1080")]
