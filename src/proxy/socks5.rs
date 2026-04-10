@@ -30,6 +30,8 @@ const AUTH_FAILURE: u8 = 0x01;
 
 /// Handshake + auth + request timeout
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Upstream target connect timeout.
+const TARGET_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Run the embedded SOCKS5 server.
 pub async fn run_socks5_server(
@@ -49,10 +51,11 @@ pub async fn run_socks5_server(
             accept = listener.accept() => {
                 match accept {
                     Ok((stream, peer)) => {
+                        info!("Accepted SOCKS5 connection from {}", peer);
                         let creds = credentials.clone();
                         tokio::spawn(async move {
                             if let Err(e) = handle_connection(stream, peer, creds).await {
-                                debug!("SOCKS5 connection from {} error: {}", peer, e);
+                                warn!("SOCKS5 connection from {} error: {}", peer, e);
                             }
                         });
                     }
@@ -125,7 +128,7 @@ async fn handle_connection(
         stream
             .write_all(&[AUTH_SUBNEG_VERSION, AUTH_SUCCESS])
             .await?;
-        debug!("SOCKS5 auth success for {} from {}", username, peer);
+        info!("SOCKS5 auth success for {} from {}", username, peer);
 
         // 3. Request
         let ver = stream.read_u8().await?;
@@ -185,19 +188,30 @@ async fn handle_connection(
     };
 
     // 4. Connect to target
-    let target_stream = match TcpStream::connect(&target_addr).await {
-        Ok(s) => {
+    info!("SOCKS5 connecting {} -> {}", peer, target_addr);
+    let target_stream = match tokio::time::timeout(
+        TARGET_CONNECT_TIMEOUT,
+        TcpStream::connect(&target_addr),
+    )
+    .await
+    {
+        Ok(Ok(s)) => {
             set_keepalive(&s)?;
             send_reply(&mut stream, REP_SUCCESS).await?;
+            info!("SOCKS5 connected {} -> {}", peer, target_addr);
             s
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             let code = match e.kind() {
                 std::io::ErrorKind::ConnectionRefused => REP_CONNECTION_REFUSED,
                 _ => REP_GENERAL_FAILURE,
             };
             send_reply(&mut stream, code).await?;
             anyhow::bail!("Failed to connect to {}: {}", target_addr, e);
+        }
+        Err(_) => {
+            send_reply(&mut stream, REP_GENERAL_FAILURE).await?;
+            anyhow::bail!("Timed out connecting to {}", target_addr);
         }
     };
 
